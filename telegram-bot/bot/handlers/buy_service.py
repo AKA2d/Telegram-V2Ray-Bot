@@ -95,14 +95,14 @@ async def confirm_order(message: Message, state: FSMContext):
     telegram_id = message.from_user.id
     panel_username = f"tg{telegram_id}_{uuid.uuid4().hex[:6]}"
     data_limit_bytes = data["traffic_gb"] * 1024**3
-    expire_at = int(time.time()) + data["months"] * 30 * 86400
+    duration_seconds = data["months"] * 30 * 86400
+    expire_at = int(time.time()) + duration_seconds
 
     try:
         panel_user = await panel_client.create_user(
             username=panel_username,
             data_limit_bytes=data_limit_bytes,
-            expire_at=expire_at,
-            status="disabled",
+            duration_seconds=duration_seconds,
         )
     except PanelAPIError as exc:
         logger.exception("Panel error while creating user")

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 import time
-import uuid
 from dataclasses import dataclass, field
 
 import httpx
@@ -103,16 +102,21 @@ class PasarGuardClient:
         self,
         username: str,
         data_limit_bytes: int,
-        expire_at: int,
+        duration_seconds: int,
         proxies: dict | None = None,
         inbounds: dict | None = None,
-        status: str = "disabled",
     ) -> PanelUser:
+        # The panel only accepts status "on_hold" or "active" at creation time.
+        # We create every new order as "on_hold" (inert, not yet consuming its
+        # validity period) and only flip it to "active" once payment is
+        # approved, via enable_user(). on_hold requires on_hold_expire_duration
+        # (seconds) instead of an absolute expire timestamp.
         payload = {
             "username": username,
-            "status": status,
+            "status": "on_hold",
             "data_limit": data_limit_bytes,
-            "expire": expire_at,
+            "expire": 0,
+            "on_hold_expire_duration": duration_seconds,
             "proxies": proxies or {"vless": {}, "vmess": {}},
         }
         if inbounds:
@@ -123,9 +127,9 @@ class PasarGuardClient:
         data = resp.json()
         return PanelUser(
             username=data.get("username", username),
-            uuid=data.get("uuid") or str(uuid.uuid4()),
+            uuid=None,
             subscription_link=data.get("subscription_url") or data.get("links", [None])[0],
-            status=data.get("status", status),
+            status=data.get("status", "on_hold"),
             raw=data,
         )
 
@@ -136,23 +140,31 @@ class PasarGuardClient:
         data = resp.json()
         return PanelUser(
             username=data.get("username", username_or_uuid),
-            uuid=data.get("uuid"),
+            uuid=None,
             subscription_link=data.get("subscription_url"),
             status=data.get("status", "unknown"),
             raw=data,
         )
 
-    async def enable_user(self, username_or_uuid: str) -> None:
-        await self._modify_status(username_or_uuid, "active")
+    async def enable_user(self, username_or_uuid: str, duration_seconds: int | None = None) -> None:
+        # Activating a user coming out of "on_hold" does NOT automatically
+        # convert on_hold_expire_duration into a real expire timestamp - the
+        # panel leaves expire=null (unlimited) unless we set it explicitly.
+        # When duration_seconds is known (new service approval), compute and
+        # send an explicit expire = now + duration alongside status=active.
+        payload = {"status": "active"}
+        if duration_seconds is not None:
+            payload["expire"] = int(time.time()) + duration_seconds
+        await self._modify_status(username_or_uuid, payload)
 
     async def disable_user(self, username_or_uuid: str) -> None:
-        await self._modify_status(username_or_uuid, "disabled")
+        await self._modify_status(username_or_uuid, {"status": "disabled"})
 
-    async def _modify_status(self, username_or_uuid: str, status: str) -> None:
-        resp = await self._request("PUT", f"/api/user/{username_or_uuid}", json={"status": status})
+    async def _modify_status(self, username_or_uuid: str, payload: dict) -> None:
+        resp = await self._request("PUT", f"/api/user/{username_or_uuid}", json=payload)
         if resp.status_code != 200:
             raise PanelAPIError(
-                f"Failed to set status={status} for {username_or_uuid}: {resp.status_code} {resp.text}",
+                f"Failed to update status for {username_or_uuid}: {resp.status_code} {resp.text}",
                 resp.status_code,
             )
 
@@ -166,7 +178,7 @@ class PasarGuardClient:
         data = resp.json()
         return PanelUser(
             username=data.get("username", username_or_uuid),
-            uuid=data.get("uuid"),
+            uuid=None,
             subscription_link=data.get("subscription_url"),
             status=data.get("status", "active"),
             raw=data,

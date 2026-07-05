@@ -54,7 +54,10 @@ async def approve_order(callback: CallbackQuery):
     if order.type == "new_service" and order.service_id:
         service = await get_service(order.service_id)
         try:
-            await panel_client.enable_user(service.panel_uuid or service.panel_username)
+            await panel_client.enable_user(
+                service.panel_uuid or service.panel_username,
+                duration_seconds=service.months * 30 * 86400,
+            )
         except PanelAPIError as exc:
             await callback.message.answer(t.PANEL_ERROR_ADMIN.format(error=str(exc)))
             await callback.answer()
