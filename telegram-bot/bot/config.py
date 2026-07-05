@@ -3,7 +3,23 @@ from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 ADMIN_TELEGRAM_ID = int(os.environ["ADMIN_TELEGRAM_ID"])
-PANEL_BASE_URL = os.environ["PANEL_BASE_URL"].rstrip("/")
+
+
+def _normalize_panel_base_url(raw: str) -> str:
+    url = raw.strip()
+    # Strip a trailing hash-router fragment (e.g. copied from a browser address
+    # bar like https://host/dashboard/#/login) which httpx would otherwise
+    # silently re-append to the end of every request URL.
+    url = url.split("#", 1)[0]
+    url = url.rstrip("/")
+    # The panel's web UI is commonly served under /dashboard, but the REST API
+    # itself lives at the domain root. Strip a trailing /dashboard segment.
+    if url.endswith("/dashboard"):
+        url = url[: -len("/dashboard")]
+    return url.rstrip("/")
+
+
+PANEL_BASE_URL = _normalize_panel_base_url(os.environ["PANEL_BASE_URL"])
 PANEL_USERNAME = os.environ["PANEL_USERNAME"]
 PANEL_PASSWORD = os.environ["PANEL_PASSWORD"]
 
