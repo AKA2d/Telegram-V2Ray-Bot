@@ -106,11 +106,14 @@ class PasarGuardClient:
         proxies: dict | None = None,
         inbounds: dict | None = None,
     ) -> PanelUser:
-        # The panel only accepts status "on_hold" or "active" at creation time.
-        # We create every new order as "on_hold" (inert, not yet consuming its
-        # validity period) and only flip it to "active" once payment is
-        # approved, via enable_user(). on_hold requires on_hold_expire_duration
-        # (seconds) instead of an absolute expire timestamp.
+        # The panel only accepts status "on_hold" or "active" at creation time
+        # (it rejects "disabled" with a 422). on_hold also requires
+        # on_hold_expire_duration (seconds) instead of an absolute expire
+        # timestamp. Since new orders must stay inert until payment is
+        # approved, we create as "on_hold" and then immediately flip it to
+        # "disabled" with a follow-up PUT (this preserves on_hold_expire_duration
+        # for later). Approval then calls enable_user() to set it "active" with
+        # an explicit expire = now + duration.
         payload = {
             "username": username,
             "status": "on_hold",
@@ -125,11 +128,23 @@ class PasarGuardClient:
         if resp.status_code not in (200, 201):
             raise PanelAPIError(f"Failed to create panel user: {resp.status_code} {resp.text}", resp.status_code)
         data = resp.json()
+
+        disable_resp = await self._request("PUT", f"/api/user/{username}", json={"status": "disabled"})
+        if disable_resp.status_code == 200:
+            data = disable_resp.json()
+        else:
+            logger.warning(
+                "Created panel user %s but failed to disable it: %s %s",
+                username,
+                disable_resp.status_code,
+                disable_resp.text,
+            )
+
         return PanelUser(
             username=data.get("username", username),
             uuid=None,
             subscription_link=data.get("subscription_url") or data.get("links", [None])[0],
-            status=data.get("status", "on_hold"),
+            status=data.get("status", "disabled"),
             raw=data,
         )
 
