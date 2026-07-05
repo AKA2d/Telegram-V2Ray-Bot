@@ -1,0 +1,126 @@
+# Telegram V2Ray Subscription Sales Bot — Build Specification
+
+## 1. Overview
+
+Build a Telegram bot (Persian-language UI, single admin) that sells V2Ray subscriptions. Subscriptions are provisioned via the **PasarGuard panel** REST API (the panel formerly/also known as "Pasargad panel" — confirm exact deployed version, since endpoint paths can differ slightly between releases; official docs: https://docs.pasarguard.org/en). The bot must be built from scratch (no reuse of the existing Telethon/n8n reseller bot).
+
+## 2. Tech Stack
+
+- **Language/Framework:** Python, using `aiogram` (or `python-telegram-bot`, pick one and stay consistent) for the Telegram bot.
+- **Database:** MySQL. Use an ORM (SQLAlchemy) with migrations (Alembic).
+- **Deployment:** Docker Compose (bot service + MySQL service), `.env`-based configuration (bot token, admin Telegram ID, panel base URL, panel login username/password, card numbers, etc.).
+- **Panel integration:** A dedicated `PasarGuardClient` adapter module — isolate all HTTP calls behind this class so panel-specific logic never leaks into bot handlers.
+
+## 3. Panel API Adapter (PasarGuard)
+
+- On startup (and whenever a request returns 401), call the panel's **login endpoint** with the configured admin username/password, receive a **bearer (access) token**, and cache it in memory (with expiry tracking if the token has a TTL).
+- Wrap every panel call with automatic re-login-and-retry on auth failure.
+- Required adapter methods (map to real PasarGuard endpoints — confirm exact paths/payloads against the actual panel's OpenAPI/Swagger docs if exposed at `/docs` or `/redoc` on the panel host, otherwise capture requests via browser dev tools against the admin dashboard):
+  - `create_user(username, data_limit_bytes, expire_at, inbounds/protocols, status="disabled")` → returns UUID + subscription link.
+  - `enable_user(username_or_uuid)` — activate a disabled user.
+  - `disable_user(username_or_uuid)`.
+  - `regenerate_subscription(username_or_uuid)` — rotate UUID/sub-link ("reset subscription").
+  - `get_user(username_or_uuid)` — fetch current status/usage.
+  - `delete_user(username_or_uuid)` (for admin cleanup, optional).
+  - `list_inbounds()` / `list_nodes()` — needed to filter for **direct servers only**, excluding tunnel nodes, at creation time.
+  - `add_tunnel_to_user(username_or_uuid)` / `remove_tunnel_from_user(username_or_uuid)` — separate, admin-only action to attach/detach a tunnel inbound to an already-existing account.
+- Config must include a list/tag of which panel inbounds/nodes are "direct" vs "tunnel" so account creation only ever selects from direct nodes by default.
+
+## 4. Database Schema (MySQL)
+
+- **users** — telegram_id (PK), username, first_name, wallet_balance (decimal, default 0, never allowed negative), created_at.
+- **services** — id (PK), owner_telegram_id (FK → users), panel_username, panel_uuid, subscription_link, status (`pending_payment` / `active` / `disabled` / `expired`), user_count, months, traffic_gb, price, created_at, expires_at, has_tunnel (bool).
+- **orders** — id (PK), telegram_id (FK), service_id (nullable until created), type (`new_service` / `wallet_topup`), amount, status (`awaiting_receipt` / `awaiting_admin_review` / `approved` / `rejected`), receipt_text, receipt_photo_file_id, submitted_at, reviewed_at, card_used.
+- **cards** — id (PK), card_number, is_active (bool), display_order.
+- **admin_settings** — key/value table for plan prices, texts, and toggles editable from the admin panel.
+
+## 5. Customer-Facing Bot Flow
+
+### 5.0 Entry
+- `/start` → if user not yet a channel member, prompt to join the main channel (with a "membership check" button) before proceeding.
+- Main menu (Persian) with buttons:
+  1. 🛒 خرید سرویس (Buy service)
+  2. ⚙️ مدیریت سرویس (Manage service)
+  3. 👤 اطلاعات حساب (Account info)
+  4. 💳 شارژ حساب (Top up wallet)
+  5. 📱 روش اتصال (How to connect)
+
+### 5.1 Buy Service
+1. Ask number of users.
+2. Ask number of months.
+3. Ask traffic amount (GB) — **no "fair usage" plan concept**; these three inputs directly determine price via a pricing formula/table configurable by the admin.
+4. Show computed price with confirm (بله) / cancel (خیر).
+5. On confirm:
+   - **Immediately call the panel API to create the subscription** on a direct-only node, with status **disabled**, so the UUID/sub-link already exists.
+   - Store the new row in `services` (status=`pending_payment`) and `orders` (type=`new_service`, status=`awaiting_receipt`).
+   - **Send the customer their subscription link right away**, clearly labeled as inactive until payment is confirmed.
+   - Show the currently active card number (from `cards` table) and the amount to pay, plus a "کارت بعدی" (next card) button the customer can tap if that card has hit its deposit limit, which shows the next active card in rotation.
+6. Prompt the customer to send proof of payment — accept **either a text message or a photo** as the receipt; save `receipt_text`/`receipt_photo_file_id` on the order and set status to `awaiting_admin_review`.
+7. **Notify the admin**:
+   - Forward the customer's receipt message to the admin.
+   - Since Telegram privacy settings can block forwarding attribution, also always send the admin a **deep link** (`tg://user?id=<telegram_id>` or `https://t.me/<username>` fallback if available) plus order details, so the admin can reliably open a DM with that customer regardless of forward restrictions.
+   - Present the admin two inline buttons: ✅ تایید (Approve) / ❌ رد (Reject).
+8. **On admin approval:** call `enable_user` on the panel, set `services.status = active`, `orders.status = approved`, and notify the customer their subscription is now active (resend the link for convenience).
+9. **On admin rejection:** set `orders.status = rejected`, `services.status` back to a rejected/cancelled state, notify the customer, and (admin's choice) optionally call `disable_user`/`delete_user` on the panel to clean up the unpaid provisioned account.
+
+### 5.2 Manage Service
+- "🔍 جستجوی سرویس" search box, plus a list of the customer's own services (pulled from `services` where `owner_telegram_id = telegram_id`).
+- If the customer instead pastes a subscription link/UUID directly into the bot, look it up against the `services` table (matched by `panel_uuid`/`subscription_link`) and, if found, route straight to that service's management screen.
+- Per-service management options:
+  - 🔄 تغییر لینک ساب (regenerate UUID/sub-link via `regenerate_subscription`, update DB, send new link).
+  - ➕ افزایش تعداد کاربر (Phase 2 — increase user count via panel update-user call, price delta charged from wallet).
+  - ⏳ تمدید سرویس / افزایش ماه (Phase 2 — renewal, extends `expires_at` and panel expiry, price delta from wallet).
+  - *(Skip: "add an already-purchased service that someone else bought" / transfer-between-accounts feature — out of scope entirely.)*
+
+### 5.3 Account Info (read-only)
+- Number of services ever purchased.
+- Number of currently active services.
+- Current wallet balance.
+
+### 5.4 Top Up Wallet (شارژ حساب)
+- Customer enters a Rial amount to add to their wallet.
+- Same payment flow as buying a service: show active card (with rotation/"next card" fallback), customer sends receipt (text or photo), forwarded + deep-linked to admin, admin approves/rejects.
+- On approval: `wallet_balance += amount` (with a DB transaction/lock to avoid race conditions), notify customer.
+- Wallet balance is later usable for Phase 2 actions (renew/increase users) that deduct rather than requiring a new manual payment each time.
+
+### 5.5 How to Connect (روش اتصال)
+- Step 1: choose platform — آیفون (iPhone) / اندروید (Android).
+- Step 2: choose an app from a list for that platform, each with a "پیشنهاد ما" (our pick) tag on one or two recommended apps.
+- Show static instructions/screenshots (admin-editable text) for the chosen platform+app combo.
+
+## 6. Admin Panel (within the same bot, admin-only menu gated by Telegram ID)
+
+- **Pricing/plan management:** edit the pricing formula or price table (per user-count/month/traffic combination), edit wallet top-up minimums if any.
+- **Service/plan text management:** edit connection-guide texts and any static copy.
+- **Order review inbox:** list of orders pending review, each with the receipt content, deep link to the customer, and Approve/Reject buttons (same as inline flow in 5.1/5.4, plus a persistent list view for anything missed).
+- **Customer lookup:** search by telegram_id/username/panel_username/uuid → view their full profile (services, orders, wallet) and a button to deep-link straight to their Telegram DM.
+- **Wallet override:** admin can set a customer's wallet balance manually, including to exactly 0.
+  - Require an explicit confirmation step ("آیا مطمئن هستید؟ بله/خیر") before applying any wallet change.
+  - Enforce a strict non-negative constraint at the DB/service layer — reject and show an error if an operation would drive balance below 0, rather than silently clamping or throwing an unhandled exception.
+  - Log all admin-initiated wallet changes (old value, new value, timestamp) for audit/debugging.
+- **Broadcast / direct message:**
+  - 📢 پیام همگانی — send a message to all users in the `users` table (respect Telegram broadcast rate limits, run as a background task with progress reporting to the admin).
+  - ✉️ پیام به شخص خاص — pick/search a customer and send them a direct message from the bot.
+- **Card rotation management:**
+  - CRUD on the `cards` table: add/remove card numbers, set `display_order`.
+  - Manual toggle of which card is currently "active" (the one shown by default to new orders) — no automatic deposit-limit tracking; the admin flips it manually, and the customer's own "next card" button is the manual fallback for that specific order.
+- **Tunnel management:**
+  - Ability to add or remove a tunnel inbound on **all** accounts, or on **one specific account** (by username/uuid), calling the panel's tunnel add/remove endpoints. Used ad hoc for outages/incidents, independent from the "direct-only at creation" rule.
+
+## 7. Cross-Cutting Requirements
+
+- **Language:** All bot-facing text (buttons, prompts, confirmations, error messages) in Persian.
+- **State management:** Use FSM (finite state machine) support of the chosen bot framework for multi-step flows (buy service, top-up, admin wallet edit, etc.), with a cancel/back option at every step.
+- **Error handling:** Any panel API failure during account creation, enable/disable, or regeneration must be caught, logged, and surfaced to the admin (and a friendly retry message to the customer) rather than leaving the DB and panel out of sync.
+- **Idempotency:** Guard against double-approval / double-processing of the same order (e.g., disable the Approve/Reject buttons after first use, check order status before acting).
+- **No proactive notifications** beyond the transactional ones described above (no expiry reminders, no low-balance alerts) — everything else is pull-based.
+- **No fair-usage plan concept** — only track user count, duration (months), and traffic (GB) per service.
+- **Phase 1 scope** (build now): buy service (with disabled-then-enabled provisioning), receipt-based approval flow with deep-link fallback, service search/lookup, subscription-link regeneration, account info, wallet top-up, connection guide, admin order review, customer lookup, wallet override with validation, broadcast/direct message, card rotation, tunnel add/remove (bulk + single).
+- **Phase 2 (explicitly deferred, no need to build stub UI for these yet):** increase user count, renewal/extend months.
+- **Explicitly out of scope entirely:** reseller/wholesale sub-bot with username/password login, "transfer service between two bot accounts" feature, multi-admin/RBAC, automated payment gateway.
+
+## 8. Open Items for the Developer to Verify Before/While Building
+
+- Confirm the exact PasarGuard panel version in use and pull its live API reference (Swagger/OpenAPI if the panel exposes `/docs`) to finalize exact endpoint paths, request/response schemas for login, user create/update/delete, and node/inbound listing — the method names above are functional placeholders, not verified literal endpoint paths.
+- Confirm whether PasarGuard's bearer token has an expiry/refresh mechanism (vs. static session) so the adapter's re-auth logic matches reality.
+- Confirm the exact identifiers PasarGuard uses to distinguish "direct" vs "tunnel" nodes/inbounds, so the creation-time filter is accurate.
