@@ -11,9 +11,11 @@ router = Router(name="connect_guide")
 GUIDE_TEXT = {
     ("ios", "NapsternetV"): "https://t.me/GodVPN_Guide/124",
     ("ios", "HAPP"): "https://t.me/GodVPN_Guide/121",
-    ("android", "v2rayNG"): "https://t.me/GodVPN_Guide/122",
+    ("ios", "v2box"): "https://t.me/GodVPN_Guide/125",
+    ("android", "v2rayNG"): "https://t.me/GodVPN_Guide/122",    
     ("android", "NapsternetV"): "https://t.me/GodVPN_Guide/124",
     ("android", "HAPP"): "https://t.me/GodVPN_Guide/121",
+    ("android", "v2box"): "https://t.me/GodVPN_Guide/125"
 }
 
 
