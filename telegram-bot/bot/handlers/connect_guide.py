@@ -9,12 +9,11 @@ from ..states import ConnectGuide
 router = Router(name="connect_guide")
 
 GUIDE_TEXT = {
-    ("ios", "Streisand"): "1. اپلیکیشن Streisand را از App Store نصب کنید.\n2. لینک اشتراک را کپی کنید.\n3. داخل اپ گزینه Add Config from Clipboard را بزنید.\n4. اتصال را برقرار کنید.",
-    ("ios", "FoXray"): "1. اپلیکیشن FoXray را از App Store نصب کنید.\n2. لینک اشتراک را وارد کنید.\n3. سرور را انتخاب و متصل شوید.",
-    ("ios", "V2Box"): "1. اپلیکیشن V2Box را نصب کنید.\n2. لینک را از طریق Import from Clipboard اضافه کنید.\n3. متصل شوید.",
-    ("android", "v2rayNG"): "1. اپلیکیشن v2rayNG را از Google Play یا سایت نصب کنید.\n2. لینک اشتراک را کپی کنید.\n3. از منو گزینه Import config from Clipboard را بزنید.\n4. متصل شوید.",
-    ("android", "NapsternetV"): "1. اپلیکیشن NapsternetV را نصب کنید.\n2. لینک را وارد کنید.\n3. سرور را انتخاب و متصل شوید.",
-    ("android", "Hiddify"): "1. اپلیکیشن Hiddify را نصب کنید.\n2. لینک اشتراک را اضافه کنید.\n3. متصل شوید.",
+    ("ios", "NapsternetV"): "https://t.me/GodVPN_Guide/124",
+    ("ios", "HAPP"): "https://t.me/GodVPN_Guide/121",
+    ("android", "v2rayNG"): "https://t.me/GodVPN_Guide/122",
+    ("android", "NapsternetV"): "https://t.me/GodVPN_Guide/124",
+    ("android", "HAPP"): "https://t.me/GodVPN_Guide/121",
 }
 
 

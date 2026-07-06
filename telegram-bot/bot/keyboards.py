@@ -131,8 +131,8 @@ def connect_platform_keyboard() -> ReplyKeyboardMarkup:
 
 
 CONNECT_APPS = {
-    "ios": [("Streisand", True), ("FoXray", True), ("V2Box", False)],
-    "android": [("v2rayNG", True), ("NapsternetV", True), ("Hiddify", False)],
+    "ios": [("NapsternetV", True), ("HAPP", False)],
+    "android": [("v2rayNG", True), ("NapsternetV", True), ("HAPP", False)],
 }
 
 
