@@ -114,6 +114,7 @@ class PasarGuardClient:
             "username": username,
             "status": "active",
             "data_limit": data_limit_bytes,
+            "group_ids": [2],
             "expire": int(time.time()) + duration_seconds,
             "proxies": proxies or {"vless": {}, "vmess": {}},
         }
