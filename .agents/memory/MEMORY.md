@@ -1,0 +1,2 @@
+- [aiogram catch-all handlers must scope to default_state](aiogram-fsm-catchall-state.md) — unscoped `@router.message(F.text.regexp(...))` handlers can silently steal input meant for other FSM flows.
+- [PasarGuard/Marzban-style panel user status quirks](pasarguard-user-status-quirks.md) — create only accepts on_hold/active; on_hold needs on_hold_expire_duration; activating doesn't auto-set expire.

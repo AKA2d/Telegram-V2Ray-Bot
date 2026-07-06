@@ -1,4 +1,6 @@
 from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import default_state
 from aiogram.types import CallbackQuery, Message
 
 from .. import texts as t
@@ -64,7 +66,7 @@ async def phase2_not_available(callback: CallbackQuery):
     await callback.answer(t.PHASE2_NOT_AVAILABLE, show_alert=True)
 
 
-@router.message(F.text.regexp(r"^[A-Za-z0-9\-_:/.]{6,}$"))
+@router.message(default_state, F.text.regexp(r"^[A-Za-z0-9\-_:/.]{6,}$"))
 async def lookup_by_text(message: Message):
     service = await find_service_by_link_or_uuid(message.text.strip())
     if not service or service.owner_telegram_id != message.from_user.id:
