@@ -76,6 +76,7 @@ def admin_menu_keyboard() -> ReplyKeyboardMarkup:
         [KeyboardButton(text=t.ADMIN_MENU_CUSTOMERS), KeyboardButton(text=t.ADMIN_MENU_WALLET)],
         [KeyboardButton(text=t.ADMIN_MENU_BROADCAST), KeyboardButton(text=t.ADMIN_MENU_DIRECT)],
         [KeyboardButton(text=t.ADMIN_MENU_CARDS), KeyboardButton(text=t.ADMIN_MENU_TUNNEL)],
+        [KeyboardButton(text=t.ADMIN_MENU_WHOLESALERS)],
         [KeyboardButton(text=t.BTN_BACK)],
     ]
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
@@ -83,16 +84,16 @@ def admin_menu_keyboard() -> ReplyKeyboardMarkup:
 
 def plans_list_keyboard(plans: list) -> InlineKeyboardMarkup:
     rows = [
-        [InlineKeyboardButton(text=f"{p.name} — {int(p.price)} تومان", callback_data=f"plan_select:{p.id}")]
+        [InlineKeyboardButton(text=f"{p.name} — {int(p.price)} تومان", callback_data=f"plan_select:plan:{p.id}")]
         for p in plans
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def plan_confirm_keyboard(plan_id: int) -> InlineKeyboardMarkup:
+def plan_confirm_keyboard(plan_type: str, plan_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=t.CONFIRM_YES, callback_data=f"plan_confirm:{plan_id}")],
+            [InlineKeyboardButton(text=t.CONFIRM_YES, callback_data=f"plan_confirm:{plan_type}:{plan_id}")],
             [InlineKeyboardButton(text=t.CONFIRM_NO, callback_data="plan_cancel")],
         ]
     )
@@ -106,6 +107,49 @@ def admin_plans_keyboard(plans: list) -> InlineKeyboardMarkup:
         rows.append([InlineKeyboardButton(text=label, callback_data=f"plan_toggle:{p.id}")])
         rows.append([InlineKeyboardButton(text=f"🗑 حذف {p.name}", callback_data=f"plan_remove:{p.id}")])
     rows.append([InlineKeyboardButton(text="➕ افزودن پلن جدید", callback_data="plan_add")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_wholesalers_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="➕ افزودن عمده‌فروش", callback_data="wholesaler_add")],
+            [InlineKeyboardButton(text="➖ حذف عمده‌فروش", callback_data="wholesaler_remove")],
+            [InlineKeyboardButton(text="➕ افزودن پلن عمده‌فروشی", callback_data="wholesale_plan_add")],
+            [InlineKeyboardButton(text="📋 لیست پلن‌های عمده‌فروشی", callback_data="wholesale_plan_list")],
+            [InlineKeyboardButton(text="🔁 اختصاص پلن", callback_data="wholesaler_assign")],
+            [InlineKeyboardButton(text="❌ حذف تخصیص", callback_data="wholesaler_unassign")],
+            [InlineKeyboardButton(text="↩ بازگشت", callback_data="wholesaler_back")],
+        ]
+    )
+
+
+def admin_wholesale_plans_keyboard(plans: list) -> InlineKeyboardMarkup:
+    rows = []
+    for p in plans:
+        status = "✅" if p.is_active else "🚫"
+        label = f"{status} {p.name} — {p.user_count} کاربر / {p.months} ماه / {p.traffic_gb} گیگ / {int(p.price)} تومان"
+        rows.append([InlineKeyboardButton(text=label, callback_data=f"wholesale_plan_toggle:{p.id}")])
+        rows.append([InlineKeyboardButton(text=f"🗑 حذف {p.name}", callback_data=f"wholesale_plan_remove:{p.id}")])
+    rows.append([InlineKeyboardButton(text="➕ افزودن پلن جدید", callback_data="wholesale_plan_add")])
+    rows.append([InlineKeyboardButton(text="↩ بازگشت", callback_data="wholesaler_back")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def wholesale_plans_list_keyboard(plans: list) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(text=f"{p.name} — {int(p.price)} تومان", callback_data=f"plan_select:wholesale:{p.id}")]
+        for p in plans
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def wholesaler_plan_action_keyboard(plans: list, wholesaler_id: int, action: str) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(text=f"{p.name} — {int(p.price)} تومان", callback_data=f"{action}:{wholesaler_id}:{p.id}")]
+        for p in plans
+    ]
+    rows.append([InlineKeyboardButton(text=t.BTN_CANCEL, callback_data="wholesaler_back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

@@ -1,6 +1,6 @@
 from aiogram import Router
 
-from . import broadcast, cards, customers, direct_message, orders, plans, tunnel, wallet_override
+from . import broadcast, cards, customers, direct_message, orders, plans, tunnel, wallet_override, wholesalers
 
 router = Router(name="admin")
 router.include_router(orders.router)
@@ -11,3 +11,4 @@ router.include_router(broadcast.router)
 router.include_router(direct_message.router)
 router.include_router(cards.router)
 router.include_router(tunnel.router)
+router.include_router(wholesalers.router)

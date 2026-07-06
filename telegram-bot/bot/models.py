@@ -28,6 +28,7 @@ class User(Base):
 
     services: Mapped[list["Service"]] = relationship(back_populates="owner")
     orders: Mapped[list["Order"]] = relationship(back_populates="user")
+    wholesaler: Mapped["Wholesaler"] = relationship(back_populates="user", uselist=False)
 
 
 class Service(Base):
@@ -93,6 +94,47 @@ class Plan(Base):
     price: Mapped[Decimal] = mapped_column(Numeric(14, 0), default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     display_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Wholesaler(Base):
+    __tablename__ = "wholesalers"
+
+    telegram_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.telegram_id"), primary_key=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped["User"] = relationship(back_populates="wholesaler", uselist=False)
+    wholesale_plans: Mapped[list["WholesalePlan"]] = relationship(
+        secondary="wholesaler_plans",
+        back_populates="wholesalers",
+    )
+
+
+class WholesalePlan(Base):
+    __tablename__ = "wholesale_plans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255))
+    user_count: Mapped[int] = mapped_column(Integer, default=1)
+    months: Mapped[int] = mapped_column(Integer, default=1)
+    traffic_gb: Mapped[int] = mapped_column(Integer, default=10)
+    price: Mapped[Decimal] = mapped_column(Numeric(14, 0), default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    display_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    wholesalers: Mapped[list["Wholesaler"]] = relationship(
+        secondary="wholesaler_plans",
+        back_populates="wholesale_plans",
+    )
+
+
+class WholesalerPlan(Base):
+    __tablename__ = "wholesaler_plans"
+
+    wholesaler_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("wholesalers.telegram_id"), primary_key=True)
+    plan_id: Mapped[int] = mapped_column(Integer, ForeignKey("wholesale_plans.id"), primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

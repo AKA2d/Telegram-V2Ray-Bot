@@ -1,8 +1,10 @@
-from dotenv import load_dotenv
 import os
-from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-load_dotenv()
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().with_name(".env"))
 
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 ADMIN_TELEGRAM_ID = int(os.environ["ADMIN_TELEGRAM_ID"])

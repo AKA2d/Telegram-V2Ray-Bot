@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 async def main() -> None:
+    # Ensure the database schema is created/updated before the bot starts.
     await init_db()
 
     bot = Bot(token=TELEGRAM_BOT_TOKEN)

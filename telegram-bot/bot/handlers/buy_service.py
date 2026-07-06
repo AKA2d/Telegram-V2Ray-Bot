@@ -10,13 +10,25 @@ from .. import texts as t
 from ..cards_repo import get_next_card, get_round_robin_card
 from ..config import ADMIN_TELEGRAM_ID
 from ..db import async_session
-from ..keyboards import main_menu, order_review_keyboard, payment_keyboard, plan_confirm_keyboard, plans_list_keyboard
+from ..keyboards import (
+    main_menu,
+    order_review_keyboard,
+    payment_keyboard,
+    plan_confirm_keyboard,
+    plans_list_keyboard,
+    wholesale_plans_list_keyboard,
+)
 from ..models import User, WalletAuditLog
 from ..orders_repo import create_order, update_order
 from ..panel_client import PanelAPIError, panel_client
 from ..plans_repo import get_plan, list_active_plans
 from ..services_repo import create_service, update_service
 from ..states import BuyService
+from ..wholesalers_repo import (
+    get_wholesale_plan,
+    is_wholesaler,
+    list_active_wholesale_plans_for_user,
+)
 
 router = Router(name="buy_service")
 logger = logging.getLogger("buy_service")
@@ -32,24 +44,39 @@ def _gen_panel_username(telegram_id: int) -> str:
     return f"tg{telegram_id}_{uuid.uuid4().hex[:6]}"
 
 
+def _parse_plan_selection(data: str) -> tuple[str, int]:
+    _, plan_type, plan_id = data.split(":")
+    return plan_type, int(plan_id)
+
+
 @router.message(F.text == t.MAIN_MENU_BUY)
 async def start_buy(message: Message, state: FSMContext):
-    plans = await list_active_plans()
-    if not plans:
-        await message.answer(t.NO_PLANS_AVAILABLE, reply_markup=main_menu(message.from_user.id == ADMIN_TELEGRAM_ID))
-        return
+    is_admin = message.from_user.id == ADMIN_TELEGRAM_ID
+    if await is_wholesaler(message.from_user.id):
+        plans = await list_active_wholesale_plans_for_user(message.from_user.id)
+        if not plans:
+            await message.answer(t.NO_WHOLESALE_PLANS_AVAILABLE, reply_markup=main_menu(is_admin))
+            return
+        keyboard = wholesale_plans_list_keyboard(plans)
+    else:
+        plans = await list_active_plans()
+        if not plans:
+            await message.answer(t.NO_PLANS_AVAILABLE, reply_markup=main_menu(is_admin))
+            return
+        keyboard = plans_list_keyboard(plans)
+
     await state.set_state(BuyService.choosing_plan)
-    await message.answer(t.CHOOSE_PLAN_PROMPT, reply_markup=plans_list_keyboard(plans))
+    await message.answer(t.CHOOSE_PLAN_PROMPT, reply_markup=keyboard)
 
 
 @router.callback_query(BuyService.choosing_plan, F.data.startswith("plan_select:"))
 async def ask_confirm(callback: CallbackQuery, state: FSMContext):
-    plan_id = int(callback.data.split(":")[1])
-    plan = await get_plan(plan_id)
+    plan_type, plan_id = _parse_plan_selection(callback.data)
+    plan = await (get_plan(plan_id) if plan_type == "plan" else get_wholesale_plan(plan_id))
     if not plan or not plan.is_active:
         await callback.answer(t.PLAN_NOT_FOUND, show_alert=True)
         return
-    await state.update_data(plan_id=plan.id)
+    await state.update_data(plan_type=plan_type, plan_id=plan.id)
     await state.set_state(BuyService.confirm)
     await callback.message.edit_text(
         t.ORDER_SUMMARY.format(
@@ -59,7 +86,7 @@ async def ask_confirm(callback: CallbackQuery, state: FSMContext):
             traffic_gb=plan.traffic_gb,
             price=int(plan.price),
         ),
-        reply_markup=plan_confirm_keyboard(plan.id),
+        reply_markup=plan_confirm_keyboard(plan_type, plan.id),
     )
     await callback.answer()
 
@@ -75,8 +102,8 @@ async def cancel_plan(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(BuyService.confirm, F.data.startswith("plan_confirm:"))
 async def confirm_order(callback: CallbackQuery, state: FSMContext):
-    plan_id = int(callback.data.split(":")[1])
-    plan = await get_plan(plan_id)
+    _, plan_type, plan_id = callback.data.split(":")
+    plan = await (get_plan(int(plan_id)) if plan_type == "plan" else get_wholesale_plan(int(plan_id)))
     if not plan or not plan.is_active:
         await callback.answer(t.PLAN_NOT_FOUND, show_alert=True)
         await state.clear()

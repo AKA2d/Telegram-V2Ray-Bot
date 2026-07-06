@@ -53,5 +53,17 @@ class AdminPlans(StatesGroup):
     add_price = State()
 
 
+class AdminWholesalers(StatesGroup):
+    add_wholesaler = State()
+    remove_wholesaler = State()
+    assign_wholesaler = State()
+    unassign_wholesaler = State()
+    add_name = State()
+    add_user_count = State()
+    add_months = State()
+    add_traffic_gb = State()
+    add_price = State()
+
+
 class AdminTunnel(StatesGroup):
     target = State()
