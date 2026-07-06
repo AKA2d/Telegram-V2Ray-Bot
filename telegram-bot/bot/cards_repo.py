@@ -2,6 +2,9 @@ from sqlalchemy import select
 
 from .db import async_session
 from .models import Card
+from .settings_repo import get_setting, set_setting
+
+ROUND_ROBIN_SETTING_KEY = "round_robin_last_card_id"
 
 
 async def list_cards() -> list[Card]:
@@ -10,14 +13,33 @@ async def list_cards() -> list[Card]:
         return list(result.scalars().all())
 
 
-async def get_active_card() -> Card | None:
+async def list_active_cards() -> list[Card]:
     async with async_session() as session:
         result = await session.execute(select(Card).where(Card.is_active == True).order_by(Card.display_order))  # noqa: E712
-        return result.scalars().first()
+        return list(result.scalars().all())
+
+
+async def get_round_robin_card() -> Card | None:
+    """Pick the next card in rotation among active cards, persisting the cursor."""
+    cards = await list_active_cards()
+    if not cards:
+        return None
+    ids = [c.id for c in cards]
+    last_id_raw = await get_setting(ROUND_ROBIN_SETTING_KEY)
+    idx = 0
+    if last_id_raw and last_id_raw != "0":
+        try:
+            idx = (ids.index(int(last_id_raw)) + 1) % len(ids)
+        except ValueError:
+            idx = 0
+    chosen = cards[idx]
+    await set_setting(ROUND_ROBIN_SETTING_KEY, str(chosen.id))
+    return chosen
 
 
 async def get_next_card(current_card_id: int | None) -> Card | None:
-    cards = await list_cards()
+    """Used by the 'next card' button when the current card turns out to be limited."""
+    cards = await list_active_cards()
     if not cards:
         return None
     if current_card_id is None:
@@ -27,16 +49,16 @@ async def get_next_card(current_card_id: int | None) -> Card | None:
         idx = ids.index(current_card_id)
     except ValueError:
         return cards[0]
-    if idx + 1 < len(cards):
-        return cards[idx + 1]
-    return None
+    if len(cards) <= 1:
+        return None
+    return cards[(idx + 1) % len(cards)]
 
 
 async def add_card(card_number: str, holder_name: str | None) -> Card:
     async with async_session() as session:
         result = await session.execute(select(Card))
         count = len(result.scalars().all())
-        card = Card(card_number=card_number, holder_name=holder_name, is_active=(count == 0), display_order=count)
+        card = Card(card_number=card_number, holder_name=holder_name, is_active=True, display_order=count)
         session.add(card)
         await session.commit()
         await session.refresh(card)
@@ -51,9 +73,9 @@ async def remove_card(card_id: int) -> None:
             await session.commit()
 
 
-async def set_active_card(card_id: int) -> None:
+async def toggle_card_active(card_id: int) -> None:
     async with async_session() as session:
-        result = await session.execute(select(Card))
-        for card in result.scalars().all():
-            card.is_active = card.id == card_id
-        await session.commit()
+        card = await session.get(Card, card_id)
+        if card:
+            card.is_active = not card.is_active
+            await session.commit()

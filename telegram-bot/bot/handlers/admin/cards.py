@@ -3,7 +3,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from ... import texts as t
-from ...cards_repo import add_card, list_cards, remove_card, set_active_card
+from ...cards_repo import add_card, list_cards, remove_card, toggle_card_active
 from ...keyboards import admin_menu_keyboard, cancel_keyboard
 from ...states import AdminCards
 from .base import AdminOnlyMiddleware
@@ -16,8 +16,9 @@ router.callback_query.middleware(AdminOnlyMiddleware())
 def _cards_keyboard(cards: list) -> InlineKeyboardMarkup:
     rows = []
     for c in cards:
-        label = f"{'✅ ' if c.is_active else ''}{c.card_number} — {c.holder_name or ''}"
-        rows.append([InlineKeyboardButton(text=label, callback_data=f"card_activate:{c.id}")])
+        status = "✅ فعال (در چرخش)" if c.is_active else "🚫 غیرفعال"
+        label = f"{status} — {c.card_number} — {c.holder_name or ''}"
+        rows.append([InlineKeyboardButton(text=label, callback_data=f"card_toggle:{c.id}")])
         rows.append([InlineKeyboardButton(text=f"🗑 حذف {c.card_number[-4:]}", callback_data=f"card_remove:{c.id}")])
     rows.append([InlineKeyboardButton(text="➕ افزودن کارت جدید", callback_data="card_add")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -52,12 +53,12 @@ async def set_card_holder(message: Message, state: FSMContext):
     await message.answer(t.CARD_ADDED, reply_markup=admin_menu_keyboard())
 
 
-@router.callback_query(F.data.startswith("card_activate:"))
-async def activate_card(callback: CallbackQuery):
+@router.callback_query(F.data.startswith("card_toggle:"))
+async def toggle_card(callback: CallbackQuery):
     card_id = int(callback.data.split(":")[1])
-    await set_active_card(card_id)
+    await toggle_card_active(card_id)
     cards = await list_cards()
-    await callback.message.edit_text(t.CARD_ACTIVATED, reply_markup=_cards_keyboard(cards))
+    await callback.message.edit_text(t.CARD_TOGGLED, reply_markup=_cards_keyboard(cards))
     await callback.answer()
 
 

@@ -1,19 +1,21 @@
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from .. import texts as t
-from ..cards_repo import get_active_card, get_next_card
+from ..cards_repo import get_next_card, get_round_robin_card
 from ..config import ADMIN_TELEGRAM_ID
-from ..keyboards import main_menu, order_review_keyboard, payment_keyboard, plans_list_keyboard
+from ..db import async_session
+from ..keyboards import main_menu, order_review_keyboard, payment_keyboard, plan_confirm_keyboard, plans_list_keyboard
+from ..models import User, WalletAuditLog
 from ..orders_repo import create_order, update_order
 from ..panel_client import PanelAPIError, panel_client
 from ..plans_repo import get_plan, list_active_plans
-from ..services_repo import create_service
+from ..services_repo import create_service, update_service
 from ..states import BuyService
 
 router = Router(name="buy_service")
@@ -24,6 +26,10 @@ def _deep_link(user) -> str:
     if user.username:
         return f"https://t.me/{user.username}"
     return f"tg://user?id={user.id}"
+
+
+def _gen_panel_username(telegram_id: int) -> str:
+    return f"tg{telegram_id}_{uuid.uuid4().hex[:6]}"
 
 
 @router.message(F.text == t.MAIN_MENU_BUY)
@@ -37,39 +43,65 @@ async def start_buy(message: Message, state: FSMContext):
 
 
 @router.callback_query(BuyService.choosing_plan, F.data.startswith("plan_select:"))
-async def confirm_order(callback: CallbackQuery, state: FSMContext):
+async def ask_confirm(callback: CallbackQuery, state: FSMContext):
     plan_id = int(callback.data.split(":")[1])
     plan = await get_plan(plan_id)
     if not plan or not plan.is_active:
         await callback.answer(t.PLAN_NOT_FOUND, show_alert=True)
         return
+    await state.update_data(plan_id=plan.id)
+    await state.set_state(BuyService.confirm)
+    await callback.message.edit_text(
+        t.ORDER_SUMMARY.format(
+            plan_name=plan.name,
+            user_count=plan.user_count,
+            months=plan.months,
+            traffic_gb=plan.traffic_gb,
+            price=int(plan.price),
+        ),
+        reply_markup=plan_confirm_keyboard(plan.id),
+    )
+    await callback.answer()
 
-    telegram_id = callback.from_user.id
-    panel_username = f"tg{telegram_id}_{uuid.uuid4().hex[:6]}"
-    data_limit_bytes = plan.traffic_gb * 1024**3
-    duration_seconds = plan.months * 30 * 86400
 
-    try:
-        panel_user = await panel_client.create_user(
-            username=panel_username,
-            data_limit_bytes=data_limit_bytes,
-            duration_seconds=duration_seconds,
-        )
-    except PanelAPIError as exc:
-        logger.exception("Panel error while creating user")
-        await callback.bot.send_message(ADMIN_TELEGRAM_ID, t.PANEL_ERROR_ADMIN.format(error=str(exc)))
-        await callback.message.answer(
-            t.ERROR_GENERIC, reply_markup=main_menu(telegram_id == ADMIN_TELEGRAM_ID)
-        )
+@router.callback_query(BuyService.confirm, F.data == "plan_cancel")
+async def cancel_plan(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    is_admin = callback.from_user.id == ADMIN_TELEGRAM_ID
+    await callback.message.edit_text(t.PLAN_PURCHASE_CANCELLED)
+    await callback.bot.send_message(callback.from_user.id, t.CANCELLED, reply_markup=main_menu(is_admin))
+    await callback.answer()
+
+
+@router.callback_query(BuyService.confirm, F.data.startswith("plan_confirm:"))
+async def confirm_order(callback: CallbackQuery, state: FSMContext):
+    plan_id = int(callback.data.split(":")[1])
+    plan = await get_plan(plan_id)
+    if not plan or not plan.is_active:
+        await callback.answer(t.PLAN_NOT_FOUND, show_alert=True)
         await state.clear()
-        await callback.answer()
         return
 
+    telegram_id = callback.from_user.id
+    is_admin = telegram_id == ADMIN_TELEGRAM_ID
+
+    async with async_session() as session:
+        user = await session.get(User, telegram_id)
+        balance = user.wallet_balance if user else 0
+
+    if balance >= plan.price:
+        await _pay_with_wallet(callback, state, plan)
+        return
+
+    # Not enough wallet balance: fall back to card-receipt flow. The panel
+    # user/subscription is intentionally NOT created yet - it will only be
+    # created (as active) once the admin approves the receipt.
+    panel_username = _gen_panel_username(telegram_id)
     service = await create_service(
         owner_telegram_id=telegram_id,
-        panel_username=panel_user.username,
-        panel_uuid=panel_user.uuid,
-        subscription_link=panel_user.subscription_link,
+        panel_username=panel_username,
+        panel_uuid=None,
+        subscription_link=None,
         status="pending_payment",
         user_count=plan.user_count,
         months=plan.months,
@@ -86,13 +118,9 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
         status="awaiting_receipt",
     )
 
-    await callback.message.answer(t.ORDER_CREATED.format(link=panel_user.subscription_link or "—"))
-
-    card = await get_active_card()
+    card = await get_round_robin_card()
     if not card:
-        await callback.message.answer(
-            t.NO_ACTIVE_CARD, reply_markup=main_menu(telegram_id == ADMIN_TELEGRAM_ID)
-        )
+        await callback.message.answer(t.NO_ACTIVE_CARD, reply_markup=main_menu(is_admin))
         await state.clear()
         await callback.answer()
         return
@@ -105,6 +133,74 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
         ),
         reply_markup=payment_keyboard(),
     )
+    await callback.answer()
+
+
+async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan) -> None:
+    telegram_id = callback.from_user.id
+    is_admin = telegram_id == ADMIN_TELEGRAM_ID
+    panel_username = _gen_panel_username(telegram_id)
+    data_limit_bytes = plan.traffic_gb * 1024**3
+    duration_seconds = plan.months * 30 * 86400
+
+    try:
+        panel_user = await panel_client.create_active_user(
+            username=panel_username,
+            data_limit_bytes=data_limit_bytes,
+            duration_seconds=duration_seconds,
+        )
+    except PanelAPIError as exc:
+        logger.exception("Panel error while creating user (wallet payment)")
+        await callback.bot.send_message(ADMIN_TELEGRAM_ID, t.PANEL_ERROR_ADMIN.format(error=str(exc)))
+        await callback.message.answer(t.ERROR_GENERIC, reply_markup=main_menu(is_admin))
+        await state.clear()
+        await callback.answer()
+        return
+
+    async with async_session() as session:
+        user = await session.get(User, telegram_id)
+        old_balance = user.wallet_balance
+        user.wallet_balance = old_balance - plan.price
+        session.add(
+            WalletAuditLog(
+                telegram_id=telegram_id,
+                old_balance=old_balance,
+                new_balance=user.wallet_balance,
+                reason=f"purchase plan '{plan.name}'",
+            )
+        )
+        await session.commit()
+
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)
+
+    service = await create_service(
+        owner_telegram_id=telegram_id,
+        panel_username=panel_user.username,
+        panel_uuid=panel_user.uuid,
+        subscription_link=panel_user.subscription_link,
+        status="active",
+        user_count=plan.user_count,
+        months=plan.months,
+        traffic_gb=plan.traffic_gb,
+        price=plan.price,
+        expires_at=expires_at,
+    )
+
+    await create_order(
+        telegram_id=telegram_id,
+        service_id=service.id,
+        type="new_service",
+        amount=plan.price,
+        status="approved",
+        submitted_at=datetime.now(timezone.utc),
+        reviewed_at=datetime.now(timezone.utc),
+    )
+
+    await callback.message.answer(
+        t.WALLET_PAYMENT_SUCCESS.format(link=panel_user.subscription_link or "—"),
+        reply_markup=main_menu(is_admin),
+    )
+    await state.clear()
     await callback.answer()
 
 

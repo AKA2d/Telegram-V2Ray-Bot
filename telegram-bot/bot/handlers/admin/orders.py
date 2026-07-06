@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
@@ -54,18 +54,27 @@ async def approve_order(callback: CallbackQuery):
     if order.type == "new_service" and order.service_id:
         service = await get_service(order.service_id)
         try:
-            await panel_client.enable_user(
-                service.panel_uuid or service.panel_username,
-                duration_seconds=service.months * 30 * 86400,
+            duration_seconds = service.months * 30 * 86400
+            data_limit_bytes = service.traffic_gb * 1024**3
+            panel_user = await panel_client.create_active_user(
+                username=service.panel_username,
+                data_limit_bytes=data_limit_bytes,
+                duration_seconds=duration_seconds,
             )
         except PanelAPIError as exc:
             await callback.message.answer(t.PANEL_ERROR_ADMIN.format(error=str(exc)))
             await callback.answer()
             return
-        await update_service(service.id, status="active")
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=service.months * 30 * 86400)
+        await update_service(
+            service.id,
+            status="active",
+            subscription_link=panel_user.subscription_link,
+            expires_at=expires_at,
+        )
         await callback.bot.send_message(order.telegram_id, t.ORDER_APPROVED_CUSTOMER)
         await callback.bot.send_message(
-            order.telegram_id, t.SERVICE_ACTIVATED_CUSTOMER.format(link=service.subscription_link or "—")
+            order.telegram_id, t.SERVICE_ACTIVATED_CUSTOMER.format(link=panel_user.subscription_link or "—")
         )
     elif order.type == "wallet_topup":
         from ...db import async_session
@@ -103,11 +112,16 @@ async def reject_order(callback: CallbackQuery):
 
     if order.type == "new_service" and order.service_id:
         service = await get_service(order.service_id)
-        await update_service(service.id, status="disabled")
-        try:
-            await panel_client.disable_user(service.panel_uuid or service.panel_username)
-        except PanelAPIError:
-            pass
+        if service.status == "pending_payment":
+            # Panel user was never created (only happens on approval), so
+            # there's nothing to disable on the panel side.
+            await update_service(service.id, status="rejected")
+        else:
+            await update_service(service.id, status="disabled")
+            try:
+                await panel_client.disable_user(service.panel_uuid or service.panel_username)
+            except PanelAPIError:
+                pass
 
     await callback.bot.send_message(order.telegram_id, t.ORDER_REJECTED_CUSTOMER)
     await callback.message.edit_reply_markup(reply_markup=None)

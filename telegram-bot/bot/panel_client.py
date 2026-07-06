@@ -98,7 +98,7 @@ class PasarGuardClient:
 
     # ---- user lifecycle ---------------------------------------------------
 
-    async def create_user(
+    async def create_active_user(
         self,
         username: str,
         data_limit_bytes: int,
@@ -106,20 +106,15 @@ class PasarGuardClient:
         proxies: dict | None = None,
         inbounds: dict | None = None,
     ) -> PanelUser:
-        # The panel only accepts status "on_hold" or "active" at creation time
-        # (it rejects "disabled" with a 422). on_hold also requires
-        # on_hold_expire_duration (seconds) instead of an absolute expire
-        # timestamp. Since new orders must stay inert until payment is
-        # approved, we create as "on_hold" and then immediately flip it to
-        # "disabled" with a follow-up PUT (this preserves on_hold_expire_duration
-        # for later). Approval then calls enable_user() to set it "active" with
-        # an explicit expire = now + duration.
+        # Used once payment is actually confirmed (instant wallet payment, or
+        # admin approval of a receipt): create the panel user directly as
+        # "active" with an explicit expire = now + duration, no inert
+        # on_hold/disabled staging needed since the order is already paid.
         payload = {
             "username": username,
-            "status": "on_hold",
+            "status": "active",
             "data_limit": data_limit_bytes,
-            "expire": 0,
-            "on_hold_expire_duration": duration_seconds,
+            "expire": int(time.time()) + duration_seconds,
             "proxies": proxies or {"vless": {}, "vmess": {}},
         }
         if inbounds:
@@ -128,23 +123,11 @@ class PasarGuardClient:
         if resp.status_code not in (200, 201):
             raise PanelAPIError(f"Failed to create panel user: {resp.status_code} {resp.text}", resp.status_code)
         data = resp.json()
-
-        disable_resp = await self._request("PUT", f"/api/user/{username}", json={"status": "disabled"})
-        if disable_resp.status_code == 200:
-            data = disable_resp.json()
-        else:
-            logger.warning(
-                "Created panel user %s but failed to disable it: %s %s",
-                username,
-                disable_resp.status_code,
-                disable_resp.text,
-            )
-
         return PanelUser(
             username=data.get("username", username),
             uuid=None,
             subscription_link=data.get("subscription_url") or data.get("links", [None])[0],
-            status=data.get("status", "disabled"),
+            status=data.get("status", "active"),
             raw=data,
         )
 
@@ -160,17 +143,6 @@ class PasarGuardClient:
             status=data.get("status", "unknown"),
             raw=data,
         )
-
-    async def enable_user(self, username_or_uuid: str, duration_seconds: int | None = None) -> None:
-        # Activating a user coming out of "on_hold" does NOT automatically
-        # convert on_hold_expire_duration into a real expire timestamp - the
-        # panel leaves expire=null (unlimited) unless we set it explicitly.
-        # When duration_seconds is known (new service approval), compute and
-        # send an explicit expire = now + duration alongside status=active.
-        payload = {"status": "active"}
-        if duration_seconds is not None:
-            payload["expire"] = int(time.time()) + duration_seconds
-        await self._modify_status(username_or_uuid, payload)
 
     async def disable_user(self, username_or_uuid: str) -> None:
         await self._modify_status(username_or_uuid, {"status": "disabled"})

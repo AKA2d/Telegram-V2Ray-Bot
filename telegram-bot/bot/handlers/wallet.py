@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from .. import texts as t
-from ..cards_repo import get_active_card, get_next_card, list_cards
+from ..cards_repo import get_next_card, get_round_robin_card, list_cards
 from ..config import ADMIN_TELEGRAM_ID
 from ..keyboards import cancel_keyboard, main_menu, order_review_keyboard, payment_keyboard
 from ..orders_repo import create_order, update_order
@@ -38,7 +38,7 @@ async def set_amount(message: Message, state: FSMContext):
 
     order = await create_order(telegram_id=message.from_user.id, type="wallet_topup", amount=amount, status="awaiting_receipt")
 
-    card = await get_active_card()
+    card = await get_round_robin_card()
     if not card:
         await message.answer(t.NO_ACTIVE_CARD, reply_markup=main_menu(message.from_user.id == ADMIN_TELEGRAM_ID))
         await state.clear()

@@ -3,6 +3,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 class BuyService(StatesGroup):
     choosing_plan = State()
+    confirm = State()
     awaiting_receipt = State()
 
 

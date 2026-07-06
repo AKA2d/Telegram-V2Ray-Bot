@@ -89,6 +89,15 @@ def plans_list_keyboard(plans: list) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def plan_confirm_keyboard(plan_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=t.CONFIRM_YES, callback_data=f"plan_confirm:{plan_id}")],
+            [InlineKeyboardButton(text=t.CONFIRM_NO, callback_data="plan_cancel")],
+        ]
+    )
+
+
 def admin_plans_keyboard(plans: list) -> InlineKeyboardMarkup:
     rows = []
     for p in plans:
