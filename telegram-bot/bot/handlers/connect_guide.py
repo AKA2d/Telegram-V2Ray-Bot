@@ -9,13 +9,13 @@ from ..states import ConnectGuide
 router = Router(name="connect_guide")
 
 GUIDE_TEXT = {
-    ("ios", "NapsternetV"): "https://t.me/GodVPN_Guide/124",
-    ("ios", "HAPP"): "https://t.me/GodVPN_Guide/121",
-    ("ios", "v2box"): "https://t.me/GodVPN_Guide/125",
-    ("android", "v2rayNG"): "https://t.me/GodVPN_Guide/122",    
-    ("android", "NapsternetV"): "https://t.me/GodVPN_Guide/124",
-    ("android", "HAPP"): "https://t.me/GodVPN_Guide/121",
-    ("android", "v2box"): "https://t.me/GodVPN_Guide/125"
+    ("ios", "NapsternetV"): "راهنمای اتصال با NapsternetV: \n https://t.me/GodVPN_Guide/124",
+    ("ios", "HAPP"): "راهنمای اتصال با HAPP: \n https://t.me/GodVPN_Guide/121",
+    ("ios", "v2box"): "راهنمای اتصال با v2box: \n https://t.me/GodVPN_Guide/125",
+    ("android", "v2rayNG"): "راهنمای اتصال با v2rayNG: \n https://t.me/GodVPN_Guide/122",
+    ("android", "NapsternetV"): "راهنمای اتصال با NapsternetV: \n https://t.me/GodVPN_Guide/124",
+    ("android", "HAPP"): "راهنمای اتصال با HAPP: \n https://t.me/GodVPN_Guide/121",
+    ("android", "v2box"): "راهنمای اتصال با v2box: \n https://t.me/GodVPN_Guide/125"
 }
 
 
