@@ -1,21 +1,20 @@
 import logging
-import time
 import uuid
+from datetime import datetime, timezone
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
 from .. import texts as t
 from ..cards_repo import get_active_card, get_next_card
 from ..config import ADMIN_TELEGRAM_ID
-from ..keyboards import cancel_keyboard, confirm_keyboard, main_menu, order_review_keyboard, payment_keyboard
+from ..keyboards import main_menu, order_review_keyboard, payment_keyboard, plans_list_keyboard
 from ..orders_repo import create_order, update_order
 from ..panel_client import PanelAPIError, panel_client
+from ..plans_repo import get_plan, list_active_plans
 from ..services_repo import create_service
-from ..settings_repo import calculate_price
 from ..states import BuyService
-from datetime import datetime, timezone
 
 router = Router(name="buy_service")
 logger = logging.getLogger("buy_service")
@@ -27,76 +26,28 @@ def _deep_link(user) -> str:
     return f"tg://user?id={user.id}"
 
 
-def _parse_positive_int(text: str) -> int | None:
-    try:
-        value = int(text.strip())
-        return value if value > 0 else None
-    except ValueError:
-        return None
-
-
 @router.message(F.text == t.MAIN_MENU_BUY)
 async def start_buy(message: Message, state: FSMContext):
-    await state.set_state(BuyService.user_count)
-    await message.answer(t.ASK_USER_COUNT, reply_markup=cancel_keyboard())
-
-
-@router.message(BuyService.user_count)
-async def set_user_count(message: Message, state: FSMContext):
-    value = _parse_positive_int(message.text)
-    if value is None:
-        await message.answer(t.INVALID_NUMBER)
+    plans = await list_active_plans()
+    if not plans:
+        await message.answer(t.NO_PLANS_AVAILABLE, reply_markup=main_menu(message.from_user.id == ADMIN_TELEGRAM_ID))
         return
-    await state.update_data(user_count=value)
-    await state.set_state(BuyService.months)
-    await message.answer(t.ASK_MONTHS, reply_markup=cancel_keyboard())
+    await state.set_state(BuyService.choosing_plan)
+    await message.answer(t.CHOOSE_PLAN_PROMPT, reply_markup=plans_list_keyboard(plans))
 
 
-@router.message(BuyService.months)
-async def set_months(message: Message, state: FSMContext):
-    value = _parse_positive_int(message.text)
-    if value is None:
-        await message.answer(t.INVALID_NUMBER)
+@router.callback_query(BuyService.choosing_plan, F.data.startswith("plan_select:"))
+async def confirm_order(callback: CallbackQuery, state: FSMContext):
+    plan_id = int(callback.data.split(":")[1])
+    plan = await get_plan(plan_id)
+    if not plan or not plan.is_active:
+        await callback.answer(t.PLAN_NOT_FOUND, show_alert=True)
         return
-    await state.update_data(months=value)
-    await state.set_state(BuyService.traffic_gb)
-    await message.answer(t.ASK_TRAFFIC, reply_markup=cancel_keyboard())
 
-
-@router.message(BuyService.traffic_gb)
-async def set_traffic(message: Message, state: FSMContext):
-    value = _parse_positive_int(message.text)
-    if value is None:
-        await message.answer(t.INVALID_NUMBER)
-        return
-    await state.update_data(traffic_gb=value)
-    data = await state.get_data()
-    price = await calculate_price(data["user_count"], data["months"], value)
-    await state.update_data(price=int(price))
-    await state.set_state(BuyService.confirm)
-    await message.answer(
-        t.ORDER_SUMMARY.format(
-            user_count=data["user_count"], months=data["months"], traffic_gb=value, price=int(price)
-        ),
-        reply_markup=confirm_keyboard(),
-    )
-
-
-@router.message(BuyService.confirm, F.text == t.BTN_CANCEL)
-async def cancel_confirm(message: Message, state: FSMContext):
-    await state.clear()
-    is_admin = message.from_user.id == ADMIN_TELEGRAM_ID
-    await message.answer(t.CANCELLED, reply_markup=main_menu(is_admin))
-
-
-@router.message(BuyService.confirm, F.text == t.BTN_CONFIRM)
-async def confirm_order(message: Message, state: FSMContext):
-    data = await state.get_data()
-    telegram_id = message.from_user.id
+    telegram_id = callback.from_user.id
     panel_username = f"tg{telegram_id}_{uuid.uuid4().hex[:6]}"
-    data_limit_bytes = data["traffic_gb"] * 1024**3
-    duration_seconds = data["months"] * 30 * 86400
-    expire_at = int(time.time()) + duration_seconds
+    data_limit_bytes = plan.traffic_gb * 1024**3
+    duration_seconds = plan.months * 30 * 86400
 
     try:
         panel_user = await panel_client.create_user(
@@ -106,9 +57,12 @@ async def confirm_order(message: Message, state: FSMContext):
         )
     except PanelAPIError as exc:
         logger.exception("Panel error while creating user")
-        await message.bot.send_message(ADMIN_TELEGRAM_ID, t.PANEL_ERROR_ADMIN.format(error=str(exc)))
-        await message.answer(t.ERROR_GENERIC, reply_markup=main_menu(message.from_user.id == ADMIN_TELEGRAM_ID))
+        await callback.bot.send_message(ADMIN_TELEGRAM_ID, t.PANEL_ERROR_ADMIN.format(error=str(exc)))
+        await callback.message.answer(
+            t.ERROR_GENERIC, reply_markup=main_menu(telegram_id == ADMIN_TELEGRAM_ID)
+        )
         await state.clear()
+        await callback.answer()
         return
 
     service = await create_service(
@@ -117,35 +71,41 @@ async def confirm_order(message: Message, state: FSMContext):
         panel_uuid=panel_user.uuid,
         subscription_link=panel_user.subscription_link,
         status="pending_payment",
-        user_count=data["user_count"],
-        months=data["months"],
-        traffic_gb=data["traffic_gb"],
-        price=data["price"],
-        expires_at=datetime.fromtimestamp(expire_at, tz=timezone.utc),
+        user_count=plan.user_count,
+        months=plan.months,
+        traffic_gb=plan.traffic_gb,
+        price=plan.price,
+        expires_at=None,
     )
 
     order = await create_order(
         telegram_id=telegram_id,
         service_id=service.id,
         type="new_service",
-        amount=data["price"],
+        amount=plan.price,
         status="awaiting_receipt",
     )
 
-    await message.answer(t.ORDER_CREATED.format(link=panel_user.subscription_link or "—"))
+    await callback.message.answer(t.ORDER_CREATED.format(link=panel_user.subscription_link or "—"))
 
     card = await get_active_card()
     if not card:
-        await message.answer(t.NO_ACTIVE_CARD, reply_markup=main_menu(message.from_user.id == ADMIN_TELEGRAM_ID))
+        await callback.message.answer(
+            t.NO_ACTIVE_CARD, reply_markup=main_menu(telegram_id == ADMIN_TELEGRAM_ID)
+        )
         await state.clear()
+        await callback.answer()
         return
 
-    await state.update_data(order_id=order.id, current_card_id=card.id)
+    await state.update_data(order_id=order.id, current_card_id=card.id, price=int(plan.price))
     await state.set_state(BuyService.awaiting_receipt)
-    await message.answer(
-        t.PAYMENT_INSTRUCTIONS.format(amount=data["price"], card_number=card.card_number, holder_name=card.holder_name or ""),
+    await callback.message.answer(
+        t.PAYMENT_INSTRUCTIONS.format(
+            amount=int(plan.price), card_number=card.card_number, holder_name=card.holder_name or ""
+        ),
         reply_markup=payment_keyboard(),
     )
+    await callback.answer()
 
 
 @router.message(BuyService.awaiting_receipt, F.text == t.BTN_NEXT_CARD)
@@ -177,8 +137,6 @@ async def receipt_text(message: Message, state: FSMContext):
 
 
 async def _handle_receipt(message: Message, state: FSMContext, photo_file_id: str | None, text: str | None):
-    from datetime import datetime as dt
-
     data = await state.get_data()
     order_id = data["order_id"]
     card = None
@@ -193,7 +151,7 @@ async def _handle_receipt(message: Message, state: FSMContext, photo_file_id: st
         receipt_text=text,
         receipt_photo_file_id=photo_file_id,
         status="awaiting_admin_review",
-        submitted_at=dt.now(timezone.utc),
+        submitted_at=datetime.now(timezone.utc),
         card_used=card.card_number if card else None,
     )
 

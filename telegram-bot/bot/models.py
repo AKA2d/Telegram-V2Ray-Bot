@@ -82,6 +82,20 @@ class Card(Base):
     display_order: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class Plan(Base):
+    __tablename__ = "plans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255))
+    user_count: Mapped[int] = mapped_column(Integer, default=1)
+    months: Mapped[int] = mapped_column(Integer, default=1)
+    traffic_gb: Mapped[int] = mapped_column(Integer, default=10)
+    price: Mapped[Decimal] = mapped_column(Numeric(14, 0), default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    display_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class AdminSetting(Base):
     __tablename__ = "admin_settings"
 

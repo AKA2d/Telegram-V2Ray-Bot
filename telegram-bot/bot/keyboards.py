@@ -72,13 +72,32 @@ def services_list_keyboard(services: list) -> InlineKeyboardMarkup:
 
 def admin_menu_keyboard() -> ReplyKeyboardMarkup:
     rows = [
-        [KeyboardButton(text=t.ADMIN_MENU_ORDERS), KeyboardButton(text=t.ADMIN_MENU_PRICING)],
+        [KeyboardButton(text=t.ADMIN_MENU_ORDERS), KeyboardButton(text=t.ADMIN_MENU_PLANS)],
         [KeyboardButton(text=t.ADMIN_MENU_CUSTOMERS), KeyboardButton(text=t.ADMIN_MENU_WALLET)],
         [KeyboardButton(text=t.ADMIN_MENU_BROADCAST), KeyboardButton(text=t.ADMIN_MENU_DIRECT)],
         [KeyboardButton(text=t.ADMIN_MENU_CARDS), KeyboardButton(text=t.ADMIN_MENU_TUNNEL)],
         [KeyboardButton(text=t.BTN_BACK)],
     ]
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+
+
+def plans_list_keyboard(plans: list) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(text=f"{p.name} — {int(p.price)} تومان", callback_data=f"plan_select:{p.id}")]
+        for p in plans
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_plans_keyboard(plans: list) -> InlineKeyboardMarkup:
+    rows = []
+    for p in plans:
+        status = "✅" if p.is_active else "🚫"
+        label = f"{status} {p.name} — {p.user_count} کاربر / {p.months} ماه / {p.traffic_gb} گیگ / {int(p.price)} تومان"
+        rows.append([InlineKeyboardButton(text=label, callback_data=f"plan_toggle:{p.id}")])
+        rows.append([InlineKeyboardButton(text=f"🗑 حذف {p.name}", callback_data=f"plan_remove:{p.id}")])
+    rows.append([InlineKeyboardButton(text="➕ افزودن پلن جدید", callback_data="plan_add")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def yes_no_inline(prefix: str, item_id: int | str) -> InlineKeyboardMarkup:

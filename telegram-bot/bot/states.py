@@ -2,10 +2,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 
 class BuyService(StatesGroup):
-    user_count = State()
-    months = State()
-    traffic_gb = State()
-    confirm = State()
+    choosing_plan = State()
     awaiting_receipt = State()
 
 
@@ -21,13 +18,6 @@ class ManageService(StatesGroup):
 class ConnectGuide(StatesGroup):
     platform = State()
     app = State()
-
-
-class AdminPricing(StatesGroup):
-    base_price = State()
-    price_per_user = State()
-    price_per_month = State()
-    price_per_gb = State()
 
 
 class AdminCustomerLookup(StatesGroup):
@@ -52,6 +42,14 @@ class AdminDirectMessage(StatesGroup):
 class AdminCards(StatesGroup):
     add_number = State()
     add_holder = State()
+
+
+class AdminPlans(StatesGroup):
+    add_name = State()
+    add_user_count = State()
+    add_months = State()
+    add_traffic_gb = State()
+    add_price = State()
 
 
 class AdminTunnel(StatesGroup):
