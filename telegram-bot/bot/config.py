@@ -9,6 +9,13 @@ load_dotenv(Path(__file__).resolve().with_name(".env"))
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 ADMIN_TELEGRAM_ID = int(os.environ["ADMIN_TELEGRAM_ID"])
 
+# Webhook configuration
+WEBHOOK_MODE = os.environ.get("WEBHOOK_MODE", "false").lower() == "true"
+WEBHOOK_HOST = os.environ.get("WEBHOOK_HOST", "").strip().rstrip("/")
+WEBHOOK_PATH = os.environ.get("WEBHOOK_PATH", "/webhook").strip()
+WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "").strip()
+WEBHOOK_PORT = int(os.environ.get("WEBHOOK_PORT", "8000"))
+
 
 def _normalize_panel_base_url(raw: str) -> str:
     url = raw.strip()
