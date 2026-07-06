@@ -16,7 +16,6 @@ from ..keyboards import (
     payment_keyboard,
     plan_confirm_keyboard,
     plans_list_keyboard,
-    wholesale_plans_list_keyboard,
 )
 from ..models import User, WalletAuditLog
 from ..orders_repo import create_order, update_order
@@ -24,11 +23,7 @@ from ..panel_client import PanelAPIError, panel_client
 from ..plans_repo import get_plan, list_active_plans
 from ..services_repo import create_service, update_service
 from ..states import BuyService
-from ..wholesalers_repo import (
-    get_wholesale_plan,
-    is_wholesaler,
-    list_active_wholesale_plans_for_user,
-)
+from ..wholesalers_repo import is_wholesaler
 
 router = Router(name="buy_service")
 logger = logging.getLogger("buy_service")
@@ -52,18 +47,12 @@ def _parse_plan_selection(data: str) -> tuple[str, int]:
 @router.message(F.text == t.MAIN_MENU_BUY)
 async def start_buy(message: Message, state: FSMContext):
     is_admin = message.from_user.id == ADMIN_TELEGRAM_ID
-    if await is_wholesaler(message.from_user.id):
-        plans = await list_active_wholesale_plans_for_user(message.from_user.id)
-        if not plans:
-            await message.answer(t.NO_WHOLESALE_PLANS_AVAILABLE, reply_markup=main_menu(is_admin))
-            return
-        keyboard = wholesale_plans_list_keyboard(plans)
-    else:
-        plans = await list_active_plans()
-        if not plans:
-            await message.answer(t.NO_PLANS_AVAILABLE, reply_markup=main_menu(is_admin))
-            return
-        keyboard = plans_list_keyboard(plans)
+    is_wl = await is_wholesaler(message.from_user.id)
+    plans = await list_active_plans()
+    if not plans:
+        await message.answer(t.NO_PLANS_AVAILABLE, reply_markup=main_menu(is_admin))
+        return
+    keyboard = plans_list_keyboard(plans, is_wholesaler=is_wl)
 
     await state.set_state(BuyService.choosing_plan)
     await message.answer(t.CHOOSE_PLAN_PROMPT, reply_markup=keyboard)
@@ -72,11 +61,15 @@ async def start_buy(message: Message, state: FSMContext):
 @router.callback_query(BuyService.choosing_plan, F.data.startswith("plan_select:"))
 async def ask_confirm(callback: CallbackQuery, state: FSMContext):
     plan_type, plan_id = _parse_plan_selection(callback.data)
-    plan = await (get_plan(plan_id) if plan_type == "plan" else get_wholesale_plan(plan_id))
+    plan = await get_plan(plan_id)
     if not plan or not plan.is_active:
         await callback.answer(t.PLAN_NOT_FOUND, show_alert=True)
         return
-    await state.update_data(plan_type=plan_type, plan_id=plan.id)
+
+    is_wl = await is_wholesaler(callback.from_user.id)
+    effective_price = plan.wholesale_price if is_wl and plan.wholesale_price else plan.price
+
+    await state.update_data(plan_type=plan_type, plan_id=plan.id, effective_price=int(effective_price))
     await state.set_state(BuyService.confirm)
     await callback.message.edit_text(
         t.ORDER_SUMMARY.format(
@@ -84,7 +77,7 @@ async def ask_confirm(callback: CallbackQuery, state: FSMContext):
             user_count=plan.user_count,
             months=plan.months,
             traffic_gb=plan.traffic_gb,
-            price=int(plan.price),
+            price=int(effective_price),
         ),
         reply_markup=plan_confirm_keyboard(plan_type, plan.id),
     )
@@ -103,12 +96,14 @@ async def cancel_plan(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(BuyService.confirm, F.data.startswith("plan_confirm:"))
 async def confirm_order(callback: CallbackQuery, state: FSMContext):
     _, plan_type, plan_id = callback.data.split(":")
-    plan = await (get_plan(int(plan_id)) if plan_type == "plan" else get_wholesale_plan(int(plan_id)))
+    plan = await get_plan(int(plan_id))
     if not plan or not plan.is_active:
         await callback.answer(t.PLAN_NOT_FOUND, show_alert=True)
         await state.clear()
         return
 
+    data = await state.get_data()
+    effective_price = data.get("effective_price", int(plan.price))
     telegram_id = callback.from_user.id
     is_admin = telegram_id == ADMIN_TELEGRAM_ID
 
@@ -116,8 +111,8 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
         user = await session.get(User, telegram_id)
         balance = user.wallet_balance if user else 0
 
-    if balance >= plan.price:
-        await _pay_with_wallet(callback, state, plan)
+    if balance >= effective_price:
+        await _pay_with_wallet(callback, state, plan, effective_price)
         return
 
     # Not enough wallet balance: fall back to card-receipt flow. The panel
@@ -133,7 +128,7 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
         user_count=plan.user_count,
         months=plan.months,
         traffic_gb=plan.traffic_gb,
-        price=plan.price,
+        price=effective_price,
         expires_at=None,
     )
 
@@ -141,7 +136,7 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
         telegram_id=telegram_id,
         service_id=service.id,
         type="new_service",
-        amount=plan.price,
+        amount=effective_price,
         status="awaiting_receipt",
     )
 
@@ -152,18 +147,18 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
-    await state.update_data(order_id=order.id, current_card_id=card.id, price=int(plan.price))
+    await state.update_data(order_id=order.id, current_card_id=card.id, price=effective_price)
     await state.set_state(BuyService.awaiting_receipt)
     await callback.message.answer(
         t.PAYMENT_INSTRUCTIONS.format(
-            amount=int(plan.price), card_number=card.card_number, holder_name=card.holder_name or ""
+            amount=effective_price, card_number=card.card_number, holder_name=card.holder_name or ""
         ),
         reply_markup=payment_keyboard(),
     )
     await callback.answer()
 
 
-async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan) -> None:
+async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan, effective_price: int) -> None:
     telegram_id = callback.from_user.id
     is_admin = telegram_id == ADMIN_TELEGRAM_ID
     panel_username = _gen_panel_username(telegram_id)
@@ -187,7 +182,7 @@ async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan) -> 
     async with async_session() as session:
         user = await session.get(User, telegram_id)
         old_balance = user.wallet_balance
-        user.wallet_balance = old_balance - plan.price
+        user.wallet_balance = old_balance - effective_price
         session.add(
             WalletAuditLog(
                 telegram_id=telegram_id,
@@ -209,7 +204,7 @@ async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan) -> 
         user_count=plan.user_count,
         months=plan.months,
         traffic_gb=plan.traffic_gb,
-        price=plan.price,
+        price=effective_price,
         expires_at=expires_at,
     )
 
@@ -217,7 +212,7 @@ async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan) -> 
         telegram_id=telegram_id,
         service_id=service.id,
         type="new_service",
-        amount=plan.price,
+        amount=effective_price,
         status="approved",
         submitted_at=datetime.now(timezone.utc),
         reviewed_at=datetime.now(timezone.utc),

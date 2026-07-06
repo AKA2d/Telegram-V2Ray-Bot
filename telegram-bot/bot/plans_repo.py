@@ -27,7 +27,7 @@ async def get_plan(plan_id: int) -> Plan | None:
         return await session.get(Plan, plan_id)
 
 
-async def create_plan(name: str, user_count: int, months: int, traffic_gb: int, price: Decimal) -> Plan:
+async def create_plan(name: str, user_count: int, months: int, traffic_gb: int, price: Decimal, wholesale_price: Decimal | None = None) -> Plan:
     async with async_session() as session:
         result = await session.execute(select(Plan))
         count = len(result.scalars().all())
@@ -37,6 +37,7 @@ async def create_plan(name: str, user_count: int, months: int, traffic_gb: int, 
             months=months,
             traffic_gb=traffic_gb,
             price=price,
+            wholesale_price=wholesale_price,
             is_active=True,
             display_order=count,
         )
@@ -59,4 +60,13 @@ async def toggle_plan_active(plan_id: int) -> None:
         plan = await session.get(Plan, plan_id)
         if plan:
             plan.is_active = not plan.is_active
+            await session.commit()
+
+
+async def update_plan_field(plan_id: int, **fields) -> None:
+    async with async_session() as session:
+        plan = await session.get(Plan, plan_id)
+        if plan:
+            for key, value in fields.items():
+                setattr(plan, key, value)
             await session.commit()

@@ -82,11 +82,11 @@ def admin_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
 
-def plans_list_keyboard(plans: list) -> InlineKeyboardMarkup:
-    rows = [
-        [InlineKeyboardButton(text=f"{p.name} — {int(p.price)} تومان", callback_data=f"plan_select:plan:{p.id}")]
-        for p in plans
-    ]
+def plans_list_keyboard(plans: list, is_wholesaler: bool = False) -> InlineKeyboardMarkup:
+    rows = []
+    for p in plans:
+        price = p.wholesale_price if is_wholesaler and p.wholesale_price else p.price
+        rows.append([InlineKeyboardButton(text=f"{p.name} — {int(price)} تومان", callback_data=f"plan_select:plan:{p.id}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -103,11 +103,29 @@ def admin_plans_keyboard(plans: list) -> InlineKeyboardMarkup:
     rows = []
     for p in plans:
         status = "✅" if p.is_active else "🚫"
-        label = f"{status} {p.name} — {p.user_count} کاربر / {p.months} ماه / {p.traffic_gb} گیگ / {int(p.price)} تومان"
+        wholesale_info = f" / عمده: {int(p.wholesale_price)}" if p.wholesale_price else ""
+        label = f"{status} {p.name} — {p.user_count} کاربر / {p.months} ماه / {p.traffic_gb} گیگ / {int(p.price)} تومان{wholesale_info}"
         rows.append([InlineKeyboardButton(text=label, callback_data=f"plan_toggle:{p.id}")])
-        rows.append([InlineKeyboardButton(text=f"🗑 حذف {p.name}", callback_data=f"plan_remove:{p.id}")])
+        rows.append([
+            InlineKeyboardButton(text=f"✏️ ویرایش {p.name}", callback_data=f"plan_edit:{p.id}"),
+            InlineKeyboardButton(text=f"🗑 حذف {p.name}", callback_data=f"plan_remove:{p.id}"),
+        ])
     rows.append([InlineKeyboardButton(text="➕ افزودن پلن جدید", callback_data="plan_add")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def plan_edit_field_keyboard(plan_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="نام", callback_data=f"plan_edit_field:{plan_id}:name")],
+            [InlineKeyboardButton(text="تعداد کاربر", callback_data=f"plan_edit_field:{plan_id}:user_count")],
+            [InlineKeyboardButton(text="مدت (ماه)", callback_data=f"plan_edit_field:{plan_id}:months")],
+            [InlineKeyboardButton(text="ترافیک (گیگ)", callback_data=f"plan_edit_field:{plan_id}:traffic_gb")],
+            [InlineKeyboardButton(text="قیمت", callback_data=f"plan_edit_field:{plan_id}:price")],
+            [InlineKeyboardButton(text="قیمت عمده‌فروشی", callback_data=f"plan_edit_field:{plan_id}:wholesale_price")],
+            [InlineKeyboardButton(text=t.BTN_BACK, callback_data="plan_edit_cancel")],
+        ]
+    )
 
 
 def admin_wholesalers_keyboard() -> InlineKeyboardMarkup:
@@ -115,10 +133,6 @@ def admin_wholesalers_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="➕ افزودن عمده‌فروش", callback_data="wholesaler_add")],
             [InlineKeyboardButton(text="➖ حذف عمده‌فروش", callback_data="wholesaler_remove")],
-            [InlineKeyboardButton(text="➕ افزودن پلن عمده‌فروشی", callback_data="wholesale_plan_add")],
-            [InlineKeyboardButton(text="📋 لیست پلن‌های عمده‌فروشی", callback_data="wholesale_plan_list")],
-            [InlineKeyboardButton(text="🔁 اختصاص پلن", callback_data="wholesaler_assign")],
-            [InlineKeyboardButton(text="❌ حذف تخصیص", callback_data="wholesaler_unassign")],
             [InlineKeyboardButton(text="↩ بازگشت", callback_data="wholesaler_back")],
         ]
     )
@@ -133,23 +147,6 @@ def admin_wholesale_plans_keyboard(plans: list) -> InlineKeyboardMarkup:
         rows.append([InlineKeyboardButton(text=f"🗑 حذف {p.name}", callback_data=f"wholesale_plan_remove:{p.id}")])
     rows.append([InlineKeyboardButton(text="➕ افزودن پلن جدید", callback_data="wholesale_plan_add")])
     rows.append([InlineKeyboardButton(text="↩ بازگشت", callback_data="wholesaler_back")])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
-def wholesale_plans_list_keyboard(plans: list) -> InlineKeyboardMarkup:
-    rows = [
-        [InlineKeyboardButton(text=f"{p.name} — {int(p.price)} تومان", callback_data=f"plan_select:wholesale:{p.id}")]
-        for p in plans
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
-def wholesaler_plan_action_keyboard(plans: list, wholesaler_id: int, action: str) -> InlineKeyboardMarkup:
-    rows = [
-        [InlineKeyboardButton(text=f"{p.name} — {int(p.price)} تومان", callback_data=f"{action}:{wholesaler_id}:{p.id}")]
-        for p in plans
-    ]
-    rows.append([InlineKeyboardButton(text=t.BTN_CANCEL, callback_data="wholesaler_back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
