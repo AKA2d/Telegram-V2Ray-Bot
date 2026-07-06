@@ -6,7 +6,8 @@ from aiogram.types import Message
 
 from .. import texts as t
 from ..cards_repo import get_next_card, get_round_robin_card, list_cards
-from ..config import ADMIN_TELEGRAM_ID
+from ..config import ADMIN_IDS, is_admin
+from ..settings_repo import get_setting
 from ..keyboards import cancel_keyboard, main_menu, order_review_keyboard, payment_keyboard
 from ..orders_repo import create_order, update_order
 from ..states import TopUp
@@ -22,6 +23,9 @@ def _deep_link(user) -> str:
 
 @router.message(F.text == t.MAIN_MENU_TOPUP)
 async def start_topup(message: Message, state: FSMContext):
+    if (await get_setting("sales_closed")) == "1":
+        await message.answer(t.SALES_CLOSEDMsg, reply_markup=main_menu(is_admin(message.from_user.id)))
+        return
     await state.set_state(TopUp.amount)
     await message.answer(t.ASK_TOPUP_AMOUNT, reply_markup=cancel_keyboard())
 
@@ -40,7 +44,7 @@ async def set_amount(message: Message, state: FSMContext):
 
     card = await get_round_robin_card()
     if not card:
-        await message.answer(t.NO_ACTIVE_CARD, reply_markup=main_menu(message.from_user.id == ADMIN_TELEGRAM_ID))
+        await message.answer(t.NO_ACTIVE_CARD, reply_markup=main_menu(is_admin(message.from_user.id)))
         await state.clear()
         return
 
@@ -95,8 +99,7 @@ async def _handle_receipt(message: Message, state: FSMContext, photo_file_id: st
         card_used=card.card_number if card else None,
     )
 
-    is_admin = message.from_user.id == ADMIN_TELEGRAM_ID
-    await message.answer(t.RECEIPT_RECEIVED, reply_markup=main_menu(is_admin))
+    await message.answer(t.RECEIPT_RECEIVED, reply_markup=main_menu(is_admin(message.from_user.id)))
     await state.clear()
 
     user_display = f"@{message.from_user.username}" if message.from_user.username else message.from_user.full_name
@@ -109,11 +112,12 @@ async def _handle_receipt(message: Message, state: FSMContext, photo_file_id: st
         card=card.card_number if card else "-",
     )
 
-    if photo_file_id:
-        await message.bot.send_photo(
-            ADMIN_TELEGRAM_ID, photo_file_id, caption=notice, reply_markup=order_review_keyboard(order_id)
-        )
-    else:
-        await message.bot.send_message(
-            ADMIN_TELEGRAM_ID, f"{notice}\n\nرسید (متن):\n{text}", reply_markup=order_review_keyboard(order_id)
-        )
+    for admin_id in ADMIN_IDS:
+        if photo_file_id:
+            await message.bot.send_photo(
+                admin_id, photo_file_id, caption=notice, reply_markup=order_review_keyboard(order_id)
+            )
+        else:
+            await message.bot.send_message(
+                admin_id, f"{notice}\n\nرسید (متن):\n{text}", reply_markup=order_review_keyboard(order_id)
+            )

@@ -3,11 +3,15 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeybo
 from . import texts as t
 
 
+SUPPORT_USERNAME = "GodVPN_admin"
+
+
 def main_menu(is_admin: bool = False) -> ReplyKeyboardMarkup:
     rows = [
         [KeyboardButton(text=t.MAIN_MENU_BUY), KeyboardButton(text=t.MAIN_MENU_MANAGE)],
         [KeyboardButton(text=t.MAIN_MENU_ACCOUNT), KeyboardButton(text=t.MAIN_MENU_TOPUP)],
         [KeyboardButton(text=t.MAIN_MENU_CONNECT)],
+        [KeyboardButton(text=t.MAIN_MENU_SUPPORT)],
     ]
     if is_admin:
         rows.append([KeyboardButton(text=t.ADMIN_MENU)])
@@ -70,13 +74,24 @@ def services_list_keyboard(services: list) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def admin_menu_keyboard() -> ReplyKeyboardMarkup:
+def admin_menu_keyboard(sales_closed: bool | None = None) -> ReplyKeyboardMarkup:
+    if sales_closed is None:
+        import asyncio
+        from .settings_repo import get_setting
+        try:
+            loop = asyncio.get_running_loop()
+            # We're inside an async context, use a sync wrapper
+            sales_closed = False
+        except RuntimeError:
+            sales_closed = False
+    status_text = t.SALES_CLOSED_LABEL_OFF if sales_closed else t.SALES_CLOSED_LABEL_ON
     rows = [
         [KeyboardButton(text=t.ADMIN_MENU_ORDERS), KeyboardButton(text=t.ADMIN_MENU_PLANS)],
         [KeyboardButton(text=t.ADMIN_MENU_CUSTOMERS), KeyboardButton(text=t.ADMIN_MENU_WALLET)],
         [KeyboardButton(text=t.ADMIN_MENU_BROADCAST), KeyboardButton(text=t.ADMIN_MENU_DIRECT)],
         [KeyboardButton(text=t.ADMIN_MENU_CARDS), KeyboardButton(text=t.ADMIN_MENU_TUNNEL)],
         [KeyboardButton(text=t.ADMIN_MENU_WHOLESALERS)],
+        [KeyboardButton(text=status_text)],
         [KeyboardButton(text=t.BTN_BACK)],
     ]
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)

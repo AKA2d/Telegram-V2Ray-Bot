@@ -7,7 +7,17 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().with_name(".env"))
 
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-ADMIN_TELEGRAM_ID = int(os.environ["ADMIN_TELEGRAM_ID"])
+
+# Comma-separated list of admin Telegram IDs.
+ADMIN_IDS: set[int] = {
+    int(uid.strip())
+    for uid in os.environ.get("ADMIN_IDS", os.environ.get("ADMIN_TELEGRAM_ID", "")).split(",")
+    if uid.strip()
+}
+
+
+def is_admin(user_id: int) -> bool:
+    return user_id in ADMIN_IDS
 
 # Webhook configuration
 WEBHOOK_MODE = os.environ.get("WEBHOOK_MODE", "false").lower() == "true"

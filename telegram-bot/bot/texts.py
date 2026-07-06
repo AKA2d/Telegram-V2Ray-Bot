@@ -5,6 +5,7 @@ MAIN_MENU_MANAGE = "⚙️ مدیریت سرویس"
 MAIN_MENU_ACCOUNT = "👤 اطلاعات حساب"
 MAIN_MENU_TOPUP = "💳 شارژ حساب"
 MAIN_MENU_CONNECT = "📱 روش اتصال"
+MAIN_MENU_SUPPORT = "💬 پشتیبانی"
 
 BTN_CONFIRM = "بله ✅"
 BTN_CANCEL = "خیر ❌"
@@ -38,7 +39,6 @@ WALLET_PAYMENT_SUCCESS = (
 ORDER_SUMMARY = (
     "خلاصه سفارش شما:\n\n"
     "📦 پلن: {plan_name}\n"
-    "👥 تعداد کاربر: {user_count}\n"
     "📅 مدت: {months} ماه\n"
     "🌐 ترافیک: {traffic_gb} گیگابایت\n"
     "💰 مبلغ قابل پرداخت: {price} تومان\n\n"
@@ -81,7 +81,6 @@ SERVICE_NOT_FOUND = "سرویسی با این مشخصات پیدا نشد."
 SERVICE_DETAIL = (
     "📦 سرویس #{id}\n"
     "وضعیت: {status}\n"
-    "تعداد کاربر: {user_count}\n"
     "مدت: {months} ماه\n"
     "ترافیک: {traffic_gb} گیگابایت\n"
     "تاریخ ساخت: {created_at}\n\n"
@@ -126,6 +125,12 @@ ADMIN_MENU_CARDS = "🏦 مدیریت کارت‌ها"
 ADMIN_MENU_TUNNEL = "🚇 مدیریت تانل"
 ADMIN_MENU_WHOLESALERS = "🛍️ مدیریت عمده‌فروشان"
 
+SALES_CLOSED_ON = "فروش بسته شد. کاربران دیگر قادر به خرید یا شارژ نیستند."
+SALES_CLOSED_OFF = "فروش باز شد."
+SALES_CLOSEDMsg = "فروش در حال حاضر بسته است. لطفاً بعداً تلاش کنید."
+SALES_CLOSED_LABEL_ON = "🟢 فروش: باز"
+SALES_CLOSED_LABEL_OFF = "🔴 فروش: بسته"
+
 WHOLESALER_MENU_HEADER = "مدیریت عمده‌فروشان"
 NO_WHOLESALERS_DEFINED = "هیچ عمده‌فروشی تعریف نشده است."
 ASK_WHOLESALER_TELEGRAM_ID = "شناسه عددی تلگرام عمده‌فروش را ارسال کنید:"
@@ -133,7 +138,7 @@ WHOLESALER_ADDED = "عمده‌فروش با موفقیت اضافه شد."
 WHOLESALER_REMOVED = "عمده‌فروش حذف شد."
 WHOLESALER_NOT_FOUND = "عمده‌فروش پیدا نشد. لطفا شناسه معتبر ارسال کنید."
 
-NOT_AUTHORIZED = "شما به این بخش دسترسی ندارید."
+NOT_AUTHORIZED = "شما به این بخش دسترسی ندارید. \n برای بازگشت به منوی اصلی. \n /start"
 
 NO_PENDING_ORDERS = "سفارش در حال بررسی وجود ندارد."
 

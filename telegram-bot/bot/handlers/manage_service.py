@@ -15,7 +15,6 @@ def _format_service(service) -> str:
     return t.SERVICE_DETAIL.format(
         id=service.id,
         status=service.status,
-        user_count=service.user_count,
         months=service.months,
         traffic_gb=service.traffic_gb,
         created_at=service.created_at.strftime("%Y-%m-%d") if service.created_at else "-",

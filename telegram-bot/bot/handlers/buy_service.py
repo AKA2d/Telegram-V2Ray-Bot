@@ -8,7 +8,8 @@ from aiogram.types import CallbackQuery, Message
 
 from .. import texts as t
 from ..cards_repo import get_next_card, get_round_robin_card
-from ..config import ADMIN_TELEGRAM_ID
+from ..config import ADMIN_IDS, is_admin
+from ..settings_repo import get_setting
 from ..db import async_session
 from ..keyboards import (
     main_menu,
@@ -46,11 +47,13 @@ def _parse_plan_selection(data: str) -> tuple[str, int]:
 
 @router.message(F.text == t.MAIN_MENU_BUY)
 async def start_buy(message: Message, state: FSMContext):
-    is_admin = message.from_user.id == ADMIN_TELEGRAM_ID
+    if (await get_setting("sales_closed")) == "1":
+        await message.answer(t.SALES_CLOSEDMsg, reply_markup=main_menu(is_admin(message.from_user.id)))
+        return
     is_wl = await is_wholesaler(message.from_user.id)
     plans = await list_active_plans()
     if not plans:
-        await message.answer(t.NO_PLANS_AVAILABLE, reply_markup=main_menu(is_admin))
+        await message.answer(t.NO_PLANS_AVAILABLE, reply_markup=main_menu(is_admin(message.from_user.id)))
         return
     keyboard = plans_list_keyboard(plans, is_wholesaler=is_wl)
 
@@ -74,7 +77,6 @@ async def ask_confirm(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         t.ORDER_SUMMARY.format(
             plan_name=plan.name,
-            user_count=plan.user_count,
             months=plan.months,
             traffic_gb=plan.traffic_gb,
             price=int(effective_price),
@@ -87,9 +89,8 @@ async def ask_confirm(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(BuyService.confirm, F.data == "plan_cancel")
 async def cancel_plan(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-    is_admin = callback.from_user.id == ADMIN_TELEGRAM_ID
     await callback.message.edit_text(t.PLAN_PURCHASE_CANCELLED)
-    await callback.bot.send_message(callback.from_user.id, t.CANCELLED, reply_markup=main_menu(is_admin))
+    await callback.bot.send_message(callback.from_user.id, t.CANCELLED, reply_markup=main_menu(is_admin(callback.from_user.id)))
     await callback.answer()
 
 
@@ -105,7 +106,6 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     effective_price = data.get("effective_price", int(plan.price))
     telegram_id = callback.from_user.id
-    is_admin = telegram_id == ADMIN_TELEGRAM_ID
 
     async with async_session() as session:
         user = await session.get(User, telegram_id)
@@ -142,7 +142,7 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
 
     card = await get_round_robin_card()
     if not card:
-        await callback.message.answer(t.NO_ACTIVE_CARD, reply_markup=main_menu(is_admin))
+        await callback.message.answer(t.NO_ACTIVE_CARD, reply_markup=main_menu(is_admin(telegram_id)))
         await state.clear()
         await callback.answer()
         return
@@ -160,7 +160,6 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
 
 async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan, effective_price: int) -> None:
     telegram_id = callback.from_user.id
-    is_admin = telegram_id == ADMIN_TELEGRAM_ID
     panel_username = _gen_panel_username(telegram_id)
     data_limit_bytes = plan.traffic_gb * 1024**3
     duration_seconds = plan.months * 30 * 86400
@@ -173,8 +172,9 @@ async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan, eff
         )
     except PanelAPIError as exc:
         logger.exception("Panel error while creating user (wallet payment)")
-        await callback.bot.send_message(ADMIN_TELEGRAM_ID, t.PANEL_ERROR_ADMIN.format(error=str(exc)))
-        await callback.message.answer(t.ERROR_GENERIC, reply_markup=main_menu(is_admin))
+        for admin_id in ADMIN_IDS:
+            await callback.bot.send_message(admin_id, t.PANEL_ERROR_ADMIN.format(error=str(exc)))
+        await callback.message.answer(t.ERROR_GENERIC, reply_markup=main_menu(is_admin(telegram_id)))
         await state.clear()
         await callback.answer()
         return
@@ -220,7 +220,7 @@ async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan, eff
 
     await callback.message.answer(
         t.WALLET_PAYMENT_SUCCESS.format(link=panel_user.subscription_link or "—"),
-        reply_markup=main_menu(is_admin),
+        reply_markup=main_menu(is_admin(telegram_id)),
     )
     await state.clear()
     await callback.answer()
@@ -273,8 +273,7 @@ async def _handle_receipt(message: Message, state: FSMContext, photo_file_id: st
         card_used=card.card_number if card else None,
     )
 
-    is_admin = message.from_user.id == ADMIN_TELEGRAM_ID
-    await message.answer(t.RECEIPT_RECEIVED, reply_markup=main_menu(is_admin))
+    await message.answer(t.RECEIPT_RECEIVED, reply_markup=main_menu(is_admin(message.from_user.id)))
     await state.clear()
 
     user_display = f"@{message.from_user.username}" if message.from_user.username else message.from_user.full_name
@@ -287,11 +286,12 @@ async def _handle_receipt(message: Message, state: FSMContext, photo_file_id: st
         card=card.card_number if card else "-",
     )
 
-    if photo_file_id:
-        await message.bot.send_photo(
-            ADMIN_TELEGRAM_ID, photo_file_id, caption=notice, reply_markup=order_review_keyboard(order_id)
-        )
-    else:
-        await message.bot.send_message(
-            ADMIN_TELEGRAM_ID, f"{notice}\n\nرسید (متن):\n{text}", reply_markup=order_review_keyboard(order_id)
-        )
+    for admin_id in ADMIN_IDS:
+        if photo_file_id:
+            await message.bot.send_photo(
+                admin_id, photo_file_id, caption=notice, reply_markup=order_review_keyboard(order_id)
+            )
+        else:
+            await message.bot.send_message(
+                admin_id, f"{notice}\n\nرسید (متن):\n{text}", reply_markup=order_review_keyboard(order_id)
+            )

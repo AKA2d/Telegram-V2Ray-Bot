@@ -4,7 +4,6 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
 from ... import texts as t
-from ...config import ADMIN_TELEGRAM_ID
 from ...orders_repo import get_order, list_pending_orders, update_order
 from ...panel_client import PanelAPIError, panel_client
 from ...services_repo import get_service, update_service
