@@ -23,6 +23,9 @@ class ConnectGuide(StatesGroup):
 
 class AdminCustomerLookup(StatesGroup):
     query = State()
+    manage = State()
+    add_service_plan = State()
+    adjust_wallet_amount = State()
 
 
 class AdminWalletOverride(StatesGroup):

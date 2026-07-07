@@ -174,6 +174,22 @@ CUSTOMER_PROFILE = (
     "لینک ارتباط مستقیم: {deep_link}"
 )
 
+CUSTOMER_SERVICES_HEADER = "سرویس‌های مشتری {telegram_id}:"
+CUSTOMER_NO_SERVICES = "این مشتری هیچ سرویسی ندارد."
+CUSTOMER_SERVICE_DETAIL = (
+    "📦 سرویس #{id}\n"
+    "پنل یوزرنیم: {panel_username}\n"
+    "وضعیت: {status}\n"
+    "مدت: {months} ماه\n"
+    "ترافیک: {traffic_gb} گیگ\n"
+    "لینک: {link}"
+)
+CUSTOMER_SERVICE_DISABLED = "سرویس #{id} غیرفعال شد."
+CUSTOMER_SERVICE_DELETED = "سرویس #{id} از پنل حذف شد."
+CUSTOMER_SERVICE_ADDED = "سرویس با موفقیت برای مشتری اضافه شد.\n🔗 لینک: {link}"
+CUSTOMER_WALLET_ADJUSTED = "موجودی کیف پول مشتری از {old} به {new} تومان تغییر یافت."
+ASK_WALLET_ADJUST_AMOUNT = "مبلغ را به تومان وارد کنید (مثبت برای افزایش، منفی برای کاهش):"
+
 ASK_WALLET_NEW_BALANCE = "موجودی جدید کیف پول این کاربر را به تومان وارد کنید:"
 CONFIRM_WALLET_CHANGE = "آیا مطمئن هستید که می‌خواهید موجودی کاربر {telegram_id} را از {old} به {new} تومان تغییر دهید؟"
 WALLET_CHANGE_DONE = "موجودی کیف پول با موفقیت تغییر کرد."

@@ -16,12 +16,12 @@ router = Router(name="start")
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
     await get_or_create_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
-
+    await message.answer(t.WELCOME, reply_markup=main_menu(is_admin(message.from_user.id)))
     if REQUIRED_CHANNEL_ID and not await is_channel_member(message.bot, message.from_user.id):
         await message.answer(t.JOIN_CHANNEL_PROMPT, reply_markup=join_channel_keyboard(REQUIRED_CHANNEL_ID))
         return
 
-        await message.answer(t.WELCOME, reply_markup=main_menu(is_admin(message.from_user.id)))
+        
 
 
 @router.callback_query(F.data == "check_membership")
@@ -30,6 +30,7 @@ async def check_membership(callback: CallbackQuery):
         await callback.message.answer(t.WELCOME, reply_markup=main_menu(is_admin(callback.from_user.id)))
         await callback.answer()
     else:
+        await callback.message.answer(t.WELCOME, reply_markup=main_menu(is_admin(callback.from_user.id)))
         await callback.answer(t.NOT_MEMBER_YET, show_alert=True)
 
 

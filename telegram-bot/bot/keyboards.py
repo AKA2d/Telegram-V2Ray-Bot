@@ -180,6 +180,36 @@ def yes_no_inline(prefix: str, item_id: int | str) -> InlineKeyboardMarkup:
     )
 
 
+def customer_manage_keyboard(telegram_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📋 مشاهده سرویس‌ها", callback_data=f"cust_svc_list:{telegram_id}")],
+            [InlineKeyboardButton(text="➕ افزودن سرویس", callback_data=f"cust_svc_add:{telegram_id}")],
+            [InlineKeyboardButton(text="💳 تغییر موجودی کیف پول", callback_data=f"cust_wallet:{telegram_id}")],
+            [InlineKeyboardButton(text="↩ بازگشت", callback_data="cust_back")],
+        ]
+    )
+
+
+def customer_services_keyboard(telegram_id: int, services: list) -> InlineKeyboardMarkup:
+    rows = []
+    for s in services:
+        status_icon = "✅" if s.status == "active" else "🚫"
+        rows.append([InlineKeyboardButton(text=f"{status_icon} سرویس #{s.id} — {s.panel_username}", callback_data=f"cust_svc_view:{telegram_id}:{s.id}")])
+    rows.append([InlineKeyboardButton(text="↩ بازگشت", callback_data=f"cust_back_to:{telegram_id}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def customer_service_actions_keyboard(telegram_id: int, service_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🚫 غیرفعال کردن", callback_data=f"cust_svc_disable:{telegram_id}:{service_id}")],
+            [InlineKeyboardButton(text="🗑 حذف از پنل", callback_data=f"cust_svc_delete:{telegram_id}:{service_id}")],
+            [InlineKeyboardButton(text="↩ بازگشت", callback_data=f"cust_svc_list:{telegram_id}")],
+        ]
+    )
+
+
 def connect_platform_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
