@@ -83,6 +83,7 @@ SERVICE_DETAIL = (
     "📦 سرویس #{id}\n"
     "وضعیت: {status}\n"
     "مدت: {months} ماه\n"
+    "تعداد کاربر: نامحدود\n"
     "ترافیک: {traffic_gb} گیگابایت\n"
     "تاریخ ساخت: {created_at}\n\n"
     "🔗 لینک اشتراک:\n{link}"
