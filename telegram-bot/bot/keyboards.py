@@ -99,10 +99,17 @@ def admin_menu_keyboard(sales_closed: bool | None = None) -> ReplyKeyboardMarkup
 
 def plans_list_keyboard(plans: list, is_wholesaler: bool = False) -> InlineKeyboardMarkup:
     rows = []
-    for p in plans:
-        price = p.wholesale_price if is_wholesaler and p.wholesale_price else p.price
-        rows.append([InlineKeyboardButton(text=f"{p.name} — {int(price)} تومان", callback_data=f"plan_select:plan:{p.id}")])
+    for i, p in enumerate(plans, 1):
+        rows.append([InlineKeyboardButton(text=str(i), callback_data=f"plan_select:plan:{p.id}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def format_plans_list(plans: list, is_wholesaler: bool = False) -> str:
+    lines = [t.CHOOSE_PLAN_PROMPT, ""]
+    for i, p in enumerate(plans, 1):
+        price = p.wholesale_price if is_wholesaler and p.wholesale_price else p.price
+        lines.append(f"{i}. {p.name} — {int(price)} تومان")
+    return "\n".join(lines)
 
 
 def plan_confirm_keyboard(plan_type: str, plan_id: int) -> InlineKeyboardMarkup:
@@ -116,17 +123,26 @@ def plan_confirm_keyboard(plan_type: str, plan_id: int) -> InlineKeyboardMarkup:
 
 def admin_plans_keyboard(plans: list) -> InlineKeyboardMarkup:
     rows = []
-    for p in plans:
+    for i, p in enumerate(plans, 1):
         status = "✅" if p.is_active else "🚫"
-        wholesale_info = f" / عمده: {int(p.wholesale_price)}" if p.wholesale_price else ""
-        label = f"{status} {p.name} — {p.user_count} کاربر / {p.months} ماه / {p.traffic_gb} گیگ / {int(p.price)} تومان{wholesale_info}"
-        rows.append([InlineKeyboardButton(text=label, callback_data=f"plan_toggle:{p.id}")])
+        rows.append([InlineKeyboardButton(text=f"{i}. {status}", callback_data=f"plan_toggle:{p.id}")])
         rows.append([
-            InlineKeyboardButton(text=f"✏️ ویرایش {p.name}", callback_data=f"plan_edit:{p.id}"),
-            InlineKeyboardButton(text=f"🗑 حذف {p.name}", callback_data=f"plan_remove:{p.id}"),
+            InlineKeyboardButton(text=f"✏️", callback_data=f"plan_edit:{p.id}"),
+            InlineKeyboardButton(text=f"🗑", callback_data=f"plan_remove:{p.id}"),
         ])
     rows.append([InlineKeyboardButton(text="➕ افزودن پلن جدید", callback_data="plan_add")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def format_admin_plans_list(plans: list) -> str:
+    if not plans:
+        return t.NO_PLANS_DEFINED
+    lines = [t.PLANS_LIST_HEADER, ""]
+    for i, p in enumerate(plans, 1):
+        status = "✅" if p.is_active else "🚫"
+        wholesale_info = f" / عمده: {int(p.wholesale_price)}" if p.wholesale_price else ""
+        lines.append(f"{i}. {status} {p.name} — {p.months} ماه / {p.traffic_gb} گیگ / {int(p.price)} تومان{wholesale_info}")
+    return "\n".join(lines)
 
 
 def plan_edit_field_keyboard(plan_id: int) -> InlineKeyboardMarkup:
@@ -151,18 +167,6 @@ def admin_wholesalers_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="↩ بازگشت", callback_data="wholesaler_back")],
         ]
     )
-
-
-def admin_wholesale_plans_keyboard(plans: list) -> InlineKeyboardMarkup:
-    rows = []
-    for p in plans:
-        status = "✅" if p.is_active else "🚫"
-        label = f"{status} {p.name} — {p.user_count} کاربر / {p.months} ماه / {p.traffic_gb} گیگ / {int(p.price)} تومان"
-        rows.append([InlineKeyboardButton(text=label, callback_data=f"wholesale_plan_toggle:{p.id}")])
-        rows.append([InlineKeyboardButton(text=f"🗑 حذف {p.name}", callback_data=f"wholesale_plan_remove:{p.id}")])
-    rows.append([InlineKeyboardButton(text="➕ افزودن پلن جدید", callback_data="wholesale_plan_add")])
-    rows.append([InlineKeyboardButton(text="↩ بازگشت", callback_data="wholesaler_back")])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def yes_no_inline(prefix: str, item_id: int | str) -> InlineKeyboardMarkup:

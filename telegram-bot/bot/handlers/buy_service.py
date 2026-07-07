@@ -12,6 +12,7 @@ from ..config import ADMIN_IDS, is_admin
 from ..settings_repo import get_setting
 from ..db import async_session
 from ..keyboards import (
+    format_plans_list,
     main_menu,
     order_review_keyboard,
     payment_keyboard,
@@ -58,7 +59,7 @@ async def start_buy(message: Message, state: FSMContext):
     keyboard = plans_list_keyboard(plans, is_wholesaler=is_wl)
 
     await state.set_state(BuyService.choosing_plan)
-    await message.answer(t.CHOOSE_PLAN_PROMPT, reply_markup=keyboard)
+    await message.answer(format_plans_list(plans, is_wholesaler=is_wl), reply_markup=keyboard)
 
 
 @router.callback_query(BuyService.choosing_plan, F.data.startswith("plan_select:"))

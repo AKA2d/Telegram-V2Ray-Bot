@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from ... import texts as t
-from ...keyboards import admin_plans_keyboard, plan_edit_field_keyboard
+from ...keyboards import admin_plans_keyboard, format_admin_plans_list, plan_edit_field_keyboard
 from ...plans_repo import create_plan, get_plan, list_all_plans, remove_plan, toggle_plan_active, update_plan_field
 from ...states import AdminPlans
 from .base import AdminOnlyMiddleware
@@ -17,8 +17,7 @@ router.callback_query.middleware(AdminOnlyMiddleware())
 
 async def _show_plans(message: Message):
     plans = await list_all_plans()
-    text = t.NO_PLANS_DEFINED if not plans else t.PLANS_LIST_HEADER
-    await message.answer(text, reply_markup=admin_plans_keyboard(plans))
+    await message.answer(format_admin_plans_list(plans), reply_markup=admin_plans_keyboard(plans))
 
 
 @router.message(F.text == t.ADMIN_MENU_PLANS)
@@ -124,7 +123,7 @@ async def toggle_plan(callback: CallbackQuery):
     plan_id = int(callback.data.split(":")[1])
     await toggle_plan_active(plan_id)
     plans = await list_all_plans()
-    await callback.message.edit_text(t.PLAN_TOGGLED, reply_markup=admin_plans_keyboard(plans))
+    await callback.message.edit_text(format_admin_plans_list(plans), reply_markup=admin_plans_keyboard(plans))
     await callback.answer()
 
 
@@ -133,7 +132,7 @@ async def remove_plan_cb(callback: CallbackQuery):
     plan_id = int(callback.data.split(":")[1])
     await remove_plan(plan_id)
     plans = await list_all_plans()
-    await callback.message.edit_text(t.PLAN_REMOVED, reply_markup=admin_plans_keyboard(plans))
+    await callback.message.edit_text(format_admin_plans_list(plans), reply_markup=admin_plans_keyboard(plans))
     await callback.answer()
 
 
@@ -174,7 +173,7 @@ async def choose_edit_field(callback: CallbackQuery, state: FSMContext):
 async def cancel_edit(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     plans = await list_all_plans()
-    await callback.message.edit_text(t.PLANS_LIST_HEADER, reply_markup=admin_plans_keyboard(plans))
+    await callback.message.edit_text(format_admin_plans_list(plans), reply_markup=admin_plans_keyboard(plans))
     await callback.answer()
 
 
@@ -221,4 +220,4 @@ async def set_edited_value(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(t.PLAN_FIELD_UPDATED)
     plans = await list_all_plans()
-    await message.answer(t.PLANS_LIST_HEADER, reply_markup=admin_plans_keyboard(plans))
+    await message.answer(format_admin_plans_list(plans), reply_markup=admin_plans_keyboard(plans))
