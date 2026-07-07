@@ -39,6 +39,7 @@ WALLET_PAYMENT_SUCCESS = (
 ORDER_SUMMARY = (
     "خلاصه سفارش شما:\n\n"
     "📦 پلن: {plan_name}\n"
+    "🧑‍🤝‍🧑 تعداد کاربر: نامحدود"
     "📅 مدت: {months} ماه\n"
     "🌐 ترافیک: {traffic_gb} گیگابایت\n"
     "💰 مبلغ قابل پرداخت: {price} تومان\n\n"
