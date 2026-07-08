@@ -8,6 +8,7 @@ from .. import texts as t
 from ..cards_repo import get_next_card, get_round_robin_card, list_cards
 from ..config import ADMIN_IDS, is_admin
 from ..settings_repo import get_setting
+from ..wholesalers_repo import is_wholesaler
 from ..keyboards import cancel_keyboard, main_menu, order_review_keyboard, payment_keyboard
 from ..orders_repo import create_order, update_order
 from ..states import TopUp
@@ -24,8 +25,9 @@ def _deep_link(user) -> str:
 @router.message(F.text == t.MAIN_MENU_TOPUP)
 async def start_topup(message: Message, state: FSMContext):
     if (await get_setting("sales_closed")) == "1":
-        await message.answer(t.SALES_CLOSEDMsg, reply_markup=main_menu(is_admin(message.from_user.id)))
-        return
+        if not is_admin(message.from_user.id) and not await is_wholesaler(message.from_user.id):
+            await message.answer(t.SALES_CLOSEDMsg, reply_markup=main_menu(is_admin(message.from_user.id)))
+            return
     await state.set_state(TopUp.amount)
     await message.answer(t.ASK_TOPUP_AMOUNT, reply_markup=cancel_keyboard())
 

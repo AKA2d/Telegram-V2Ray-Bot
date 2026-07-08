@@ -48,10 +48,17 @@ def _parse_plan_selection(data: str) -> tuple[str, int]:
 
 @router.message(F.text == t.MAIN_MENU_BUY)
 async def start_buy(message: Message, state: FSMContext):
+    user_id = message.from_user.id
     if (await get_setting("sales_closed")) == "1":
-        await message.answer(t.SALES_CLOSEDMsg, reply_markup=main_menu(is_admin(message.from_user.id)))
-        return
-    is_wl = await is_wholesaler(message.from_user.id)
+        if not is_admin(user_id) and not await is_wholesaler(user_id):
+            from ..db import async_session
+            from ..models import User
+            async with async_session() as session:
+                user = await session.get(User, user_id)
+                if not user or user.wallet_balance <= 0:
+                    await message.answer(t.SALES_CLOSEDMsg, reply_markup=main_menu(is_admin(user_id)))
+                    return
+    is_wl = await is_wholesaler(user_id)
     plans = await list_active_plans()
     if not plans:
         await message.answer(t.NO_PLANS_AVAILABLE, reply_markup=main_menu(is_admin(message.from_user.id)))
