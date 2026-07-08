@@ -219,10 +219,14 @@ async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan, eff
         reviewed_at=datetime.now(timezone.utc),
     )
 
-    await callback.message.answer(
-        t.WALLET_PAYMENT_SUCCESS.format(link=panel_user.subscription_link or "—"),
-        reply_markup=main_menu(is_admin(telegram_id)),
-    )
+    from ..qr_gen import generate_qr_image
+
+    text = t.WALLET_PAYMENT_SUCCESS.format(link=panel_user.subscription_link or "—")
+    if panel_user.subscription_link:
+        qr_photo = generate_qr_image(panel_user.subscription_link)
+        await callback.message.answer_photo(qr_photo, caption=text)
+    else:
+        await callback.message.answer(text, reply_markup=main_menu(is_admin(telegram_id)))
     await state.clear()
     await callback.answer()
 

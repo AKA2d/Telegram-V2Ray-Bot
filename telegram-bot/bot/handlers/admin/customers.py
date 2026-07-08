@@ -217,9 +217,15 @@ async def add_service_confirm(callback: CallbackQuery, state: FSMContext):
     )
 
     await state.clear()
-    await callback.message.edit_text(
-        t.CUSTOMER_SERVICE_ADDED.format(link=panel_user.subscription_link or "—")
-    )
+    if panel_user.subscription_link:
+        from ...qr_gen import generate_qr_image
+        text = t.CUSTOMER_SERVICE_ADDED.format(link=panel_user.subscription_link)
+        qr_photo = generate_qr_image(panel_user.subscription_link)
+        await callback.message.answer_photo(qr_photo, caption=text)
+    else:
+        await callback.message.edit_text(
+            t.CUSTOMER_SERVICE_ADDED.format(link="—")
+        )
     await callback.answer()
 
 

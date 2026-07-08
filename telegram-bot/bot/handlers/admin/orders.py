@@ -72,9 +72,15 @@ async def approve_order(callback: CallbackQuery):
             expires_at=expires_at,
         )
         await callback.bot.send_message(order.telegram_id, t.ORDER_APPROVED_CUSTOMER)
-        await callback.bot.send_message(
-            order.telegram_id, t.SERVICE_ACTIVATED_CUSTOMER.format(link=panel_user.subscription_link or "—")
-        )
+        if panel_user.subscription_link:
+            from ...qr_gen import generate_qr_image
+            text = t.SERVICE_ACTIVATED_CUSTOMER.format(link=panel_user.subscription_link)
+            qr_photo = generate_qr_image(panel_user.subscription_link)
+            await callback.bot.send_photo(order.telegram_id, qr_photo, caption=text)
+        else:
+            await callback.bot.send_message(
+                order.telegram_id, t.SERVICE_ACTIVATED_CUSTOMER.format(link="—")
+            )
     elif order.type == "wallet_topup":
         from ...db import async_session
         from ...models import User, WalletAuditLog

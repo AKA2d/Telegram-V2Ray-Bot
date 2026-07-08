@@ -55,7 +55,13 @@ async def regenerate_service(callback: CallbackQuery):
         await callback.answer(t.ERROR_GENERIC, show_alert=True)
         return
     await update_service(service.id, subscription_link=panel_user.subscription_link, panel_uuid=panel_user.uuid or service.panel_uuid)
-    await callback.message.answer(t.REGENERATE_DONE.format(link=panel_user.subscription_link or "—"))
+    if panel_user.subscription_link:
+        from ..qr_gen import generate_qr_image
+        text = t.REGENERATE_DONE.format(link=panel_user.subscription_link)
+        qr_photo = generate_qr_image(panel_user.subscription_link)
+        await callback.message.answer_photo(qr_photo, caption=text)
+    else:
+        await callback.message.answer(t.REGENERATE_DONE.format(link="—"))
     await callback.answer()
 
 
