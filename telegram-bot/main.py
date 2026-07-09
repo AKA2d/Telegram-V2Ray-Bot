@@ -1,6 +1,6 @@
 import asyncio
 import logging
-
+import ssl
 from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
@@ -78,9 +78,16 @@ async def _run_webhook(bot: Bot, dp: Dispatcher) -> None:
 
     app.router.add_post(WEBHOOK_PATH, handle_webhook)
 
+
+    ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    ssl_context.load_cert_chain(
+        '/etc/letsencrypt/live/tgx.tbx.ncmc.ir/fullchain.pem',
+        '/etc/letsencrypt/live/tgx.tbx.ncmc.ir/privkey.pem'
+    )
+    
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", WEBHOOK_PORT)
+    site = web.TCPSite(runner, "0.0.0.0", WEBHOOK_PORT, ssl_context=ssl_context)
     await site.start()
     logger.info("Webhook server listening on port %d", WEBHOOK_PORT)
 
