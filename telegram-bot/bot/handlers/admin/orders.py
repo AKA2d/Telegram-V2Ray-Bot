@@ -32,7 +32,10 @@ async def list_orders(message: Message):
         from ...keyboards import order_review_keyboard
 
         if order.receipt_photo_file_id:
-            await message.answer_photo(order.receipt_photo_file_id, caption=text, reply_markup=order_review_keyboard(order.id))
+            try:
+                await message.answer_photo(order.receipt_photo_file_id, caption=text, reply_markup=order_review_keyboard(order.id))
+            except Exception:
+                await message.answer(text, reply_markup=order_review_keyboard(order.id))
         else:
             await message.answer(text, reply_markup=order_review_keyboard(order.id))
 
