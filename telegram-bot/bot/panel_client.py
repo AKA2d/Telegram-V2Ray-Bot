@@ -96,6 +96,12 @@ class PasarGuardClient:
         data = resp.json()
         return data if isinstance(data, list) else data.get("nodes", [])
 
+    async def get_system_stats(self) -> dict:
+        resp = await self._request("GET", "/api/system")
+        if resp.status_code != 200:
+            raise PanelAPIError(f"Failed to get system stats: {resp.status_code} {resp.text}", resp.status_code)
+        return resp.json()
+
     # ---- user lifecycle ---------------------------------------------------
 
     async def create_active_user(

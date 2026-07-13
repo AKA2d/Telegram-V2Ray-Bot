@@ -7,6 +7,7 @@ from ... import texts as t
 from ...orders_repo import get_order, list_pending_orders, update_order
 from ...panel_client import PanelAPIError, panel_client
 from ...services_repo import get_service, update_service
+from ...settings_repo import get_setting, set_setting
 from ...users_repo import get_or_create_user
 from .base import AdminOnlyMiddleware
 
@@ -53,8 +54,15 @@ async def approve_order(callback: CallbackQuery):
 
     await update_order(order_id, status="approved", reviewed_at=datetime.now(timezone.utc))
 
+    # Increment sold amount for stats tracking
+    current_sold = int(await get_setting("sold_amount"))
+    await set_setting("sold_amount", str(current_sold + int(order.amount)))
+
     if order.type == "new_service" and order.service_id:
         service = await get_service(order.service_id)
+        # Increment sold traffic for stats tracking
+        current_traffic = int(await get_setting("sold_traffic"))
+        await set_setting("sold_traffic", str(current_traffic + service.traffic_gb))
         try:
             duration_seconds = service.months * 30 * 86400
             data_limit_bytes = service.traffic_gb * 1024**3

@@ -128,6 +128,22 @@ ADMIN_MENU_DIRECT = "✉️ پیام به شخص خاص"
 ADMIN_MENU_CARDS = "🏦 مدیریت کارت‌ها"
 ADMIN_MENU_TUNNEL = "🚇 مدیریت تانل"
 ADMIN_MENU_WHOLESALERS = "🛍️ مدیریت عمده‌فروشان"
+ADMIN_MENU_STATS = "📊 آمار پنل"
+
+PANEL_STATS = (
+    "📊 آمار پنل\n\n"
+    "👥 کاربران:\n"
+    "   کل: {total_users}\n"
+    "   فعال: {active_users}\n"
+    "   غیرفعال: {disabled_users}\n"
+    "   آنلاین: {online_users}\n"
+    "   محدود: {limited_users}\n"
+    "   منقضی: {expired_users}\n\n"
+    "📤 ترافیک مصرف‌شده: {used_traffic}\n"
+    "📦 ترافیک کل فروخته‌شده: {sold_traffic} گیگ\n"
+    "💰 مبلغ کل فروش: {sold_amount} تومان\n"
+    "📦 تعداد کل سرویس‌ها: {service_count}"
+)
 
 SALES_CLOSED_ON = "فروش بسته شد. کاربران دیگر قادر به خرید یا شارژ نیستند."
 SALES_CLOSED_OFF = "فروش باز شد."

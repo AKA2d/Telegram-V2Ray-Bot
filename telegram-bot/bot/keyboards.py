@@ -90,7 +90,7 @@ def admin_menu_keyboard(sales_closed: bool | None = None) -> ReplyKeyboardMarkup
         [KeyboardButton(text=t.ADMIN_MENU_CUSTOMERS), KeyboardButton(text=t.ADMIN_MENU_WALLET)],
         [KeyboardButton(text=t.ADMIN_MENU_BROADCAST), KeyboardButton(text=t.ADMIN_MENU_DIRECT)],
         [KeyboardButton(text=t.ADMIN_MENU_CARDS), KeyboardButton(text=t.ADMIN_MENU_TUNNEL)],
-        [KeyboardButton(text=t.ADMIN_MENU_WHOLESALERS)],
+        [KeyboardButton(text=t.ADMIN_MENU_WHOLESALERS), KeyboardButton(text=t.ADMIN_MENU_STATS)],
         [KeyboardButton(text=status_text)],
         [KeyboardButton(text=t.BTN_BACK)],
     ]

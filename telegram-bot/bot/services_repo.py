@@ -55,3 +55,9 @@ async def count_user_services(telegram_id: int) -> tuple[int, int]:
         total = len(services)
         active = len([s for s in services if s.status == "active"])
         return total, active
+
+
+async def count_all_services() -> int:
+    async with async_session() as session:
+        result = await session.execute(select(Service))
+        return len(result.scalars().all())

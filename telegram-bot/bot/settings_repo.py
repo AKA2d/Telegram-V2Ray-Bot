@@ -5,7 +5,11 @@ from sqlalchemy import select
 from .db import async_session
 from .models import AdminSetting
 
-DEFAULTS: dict[str, str] = {}
+DEFAULTS: dict[str, str] = {
+    "sales_closed": "0",
+    "sold_amount": "0",
+    "sold_traffic": "0",
+}
 
 
 async def get_setting(key: str) -> str:
