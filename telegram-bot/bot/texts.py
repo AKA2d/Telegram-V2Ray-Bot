@@ -81,11 +81,13 @@ SERVICE_NOT_FOUND = "سرویسی با این مشخصات پیدا نشد."
 
 SERVICE_DETAIL = (
     "📦 سرویس #{id}\n"
+    "نام: {panel_username}\n"
+    "پلن: {months} ماه / نامحدود کاربر / {traffic_gb} گیگ\n"
     "وضعیت: {status}\n"
-    "مدت: {months} ماه\n"
-    "تعداد کاربر: نامحدود\n"
-    "ترافیک: {traffic_gb} گیگابایت\n"
-    "تاریخ ساخت: {created_at}\n\n"
+    "مدت باقی‌مانده: {remaining_days} روز\n"
+    "ترافیک باقی‌مانده: {remaining_traffic}\n"
+    "تاریخ خرید: {created_at}\n"
+    "تاریخ انقضا: {expires_at}\n\n"
     "🔗 لینک اشتراک:\n{link}"
 )
 
@@ -181,9 +183,12 @@ CUSTOMER_NO_SERVICES = "این مشتری هیچ سرویسی ندارد."
 CUSTOMER_SERVICE_DETAIL = (
     "📦 سرویس #{id}\n"
     "پنل یوزرنیم: {panel_username}\n"
+    "پلن: {months} ماه / نامحدود کاربر / {traffic_gb} گیگ\n"
     "وضعیت: {status}\n"
-    "مدت: {months} ماه\n"
-    "ترافیک: {traffic_gb} گیگ\n"
+    "مدت باقی‌مانده: {remaining_days} روز\n"
+    "ترافیک باقی‌مانده: {remaining_traffic}\n"
+    "تاریخ خرید: {created_at}\n"
+    "تاریخ انقضا: {expires_at}\n\n"
     "لینک: {link}"
 )
 CUSTOMER_SERVICE_DISABLED = "سرویس #{id} غیرفعال شد."

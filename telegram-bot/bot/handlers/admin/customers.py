@@ -2,6 +2,8 @@ import logging
 import uuid
 from decimal import Decimal
 
+from datetime import datetime, timezone
+
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -101,12 +103,35 @@ async def view_customer_service(callback: CallbackQuery):
     if not service or service.owner_telegram_id != telegram_id:
         await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
         return
+
+    remaining_days = "نامحدود"
+    if service.expires_at:
+        now = datetime.now(timezone.utc)
+        expires = service.expires_at if service.expires_at.tzinfo else service.expires_at.replace(tzinfo=timezone.utc)
+        delta = expires - now
+        remaining_days = "منقضی شده" if delta.days <= 0 else f"{delta.days} روز"
+
+    remaining_traffic = f"{service.traffic_gb} گیگ"
+    try:
+        panel_user = await panel_client.get_user(service.panel_username)
+        bytes_used = panel_user.raw.get("usage") or panel_user.raw.get("data_usage") or panel_user.raw.get("used_traffic")
+        if bytes_used:
+            used_gb = bytes_used / (1024 ** 3)
+            remaining = max(0, service.traffic_gb - used_gb)
+            remaining_traffic = f"{remaining:.1f} از {service.traffic_gb} گیگ"
+    except PanelAPIError:
+        pass
+
     text = t.CUSTOMER_SERVICE_DETAIL.format(
         id=service.id,
         panel_username=service.panel_username,
-        status=service.status,
         months=service.months,
         traffic_gb=service.traffic_gb,
+        status=service.status,
+        remaining_days=remaining_days,
+        remaining_traffic=remaining_traffic,
+        created_at=service.created_at.strftime("%Y-%m-%d") if service.created_at else "-",
+        expires_at=service.expires_at.strftime("%Y-%m-%d") if service.expires_at else "نامحدود",
         link=service.subscription_link or "—",
     )
     await callback.message.edit_text(text, reply_markup=customer_service_actions_keyboard(telegram_id, service_id))

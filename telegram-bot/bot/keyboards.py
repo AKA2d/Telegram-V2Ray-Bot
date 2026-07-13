@@ -69,7 +69,7 @@ def service_actions_keyboard(service_id: int) -> InlineKeyboardMarkup:
 
 def services_list_keyboard(services: list) -> InlineKeyboardMarkup:
     rows = [
-        [InlineKeyboardButton(text=f"#{s.id} — {s.status}", callback_data=f"svc_view:{s.id}")] for s in services
+        [InlineKeyboardButton(text=f"#{s.id} — {s.panel_username} ({s.status})", callback_data=f"svc_view:{s.id}")] for s in services
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

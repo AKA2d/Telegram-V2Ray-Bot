@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import default_state
@@ -11,13 +13,51 @@ from ..services_repo import find_service_by_link_or_uuid, get_service, list_user
 router = Router(name="manage_service")
 
 
-def _format_service(service) -> str:
+def _format_remaining_days(expires_at) -> str:
+    if not expires_at:
+        return "نامحدود"
+    now = datetime.now(timezone.utc)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    delta = expires_at - now
+    days = delta.days
+    if days <= 0:
+        return "منقضی شده"
+    return f"{days} روز"
+
+
+def _format_traffic(bytes_used: int | None, total_gb: int) -> str:
+    if bytes_used is None:
+        return f"{total_gb} گیگ (نامشخص)"
+    used_gb = bytes_used / (1024 ** 3)
+    remaining = total_gb - used_gb
+    if remaining < 0:
+        remaining = 0
+    return f"{remaining:.1f} از {total_gb} گیگ"
+
+
+async def _format_service(service) -> str:
+    remaining_days = _format_remaining_days(service.expires_at)
+
+    remaining_traffic = f"{service.traffic_gb} گیگ"
+    try:
+        panel_user = await panel_client.get_user(service.panel_username)
+        bytes_used = panel_user.raw.get("usage") or panel_user.raw.get("data_usage") or panel_user.raw.get("used_traffic")
+        if bytes_used:
+            remaining_traffic = _format_traffic(bytes_used, service.traffic_gb)
+    except PanelAPIError:
+        pass
+
     return t.SERVICE_DETAIL.format(
         id=service.id,
-        status=service.status,
+        panel_username=service.panel_username,
         months=service.months,
         traffic_gb=service.traffic_gb,
+        status=service.status,
+        remaining_days=remaining_days,
+        remaining_traffic=remaining_traffic,
         created_at=service.created_at.strftime("%Y-%m-%d") if service.created_at else "-",
+        expires_at=service.expires_at.strftime("%Y-%m-%d") if service.expires_at else "نامحدود",
         link=service.subscription_link or "—",
     )
 
@@ -38,7 +78,7 @@ async def view_service(callback: CallbackQuery):
     if not service or service.owner_telegram_id != callback.from_user.id:
         await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
         return
-    await callback.message.answer(_format_service(service), reply_markup=service_actions_keyboard(service.id))
+    await callback.message.answer(await _format_service(service), reply_markup=service_actions_keyboard(service.id))
     await callback.answer()
 
 
@@ -76,4 +116,4 @@ async def lookup_by_text(message: Message):
     service = await find_service_by_link_or_uuid(message.text.strip())
     if not service or service.owner_telegram_id != message.from_user.id:
         return
-    await message.answer(_format_service(service), reply_markup=service_actions_keyboard(service.id))
+    await message.answer(await _format_service(service), reply_markup=service_actions_keyboard(service.id))
