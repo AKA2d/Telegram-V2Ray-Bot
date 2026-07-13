@@ -40,13 +40,18 @@ async def _format_service(service) -> str:
     remaining_days = _format_remaining_days(service.expires_at)
 
     remaining_traffic = f"{service.traffic_gb} گیگ"
-    try:
-        panel_user = await panel_client.get_user(service.panel_username)
-        bytes_used = panel_user.raw.get("usage") or panel_user.raw.get("data_usage") or panel_user.raw.get("used_traffic")
-        if bytes_used:
-            remaining_traffic = _format_traffic(bytes_used, service.traffic_gb)
-    except PanelAPIError:
-        pass
+    if service.status == "active":
+        try:
+            panel_user = await panel_client.get_user(service.panel_username)
+            bytes_used = panel_user.raw.get("usage") or panel_user.raw.get("data_usage") or panel_user.raw.get("used_traffic")
+            if bytes_used:
+                remaining_traffic = _format_traffic(bytes_used, service.traffic_gb)
+        except PanelAPIError:
+            pass
+
+    link = service.subscription_link or "—"
+    if service.status != "active":
+        link = "غیرفعال"
 
     return t.SERVICE_DETAIL.format(
         id=service.id,
@@ -58,7 +63,7 @@ async def _format_service(service) -> str:
         remaining_traffic=remaining_traffic,
         created_at=service.created_at.strftime("%Y-%m-%d") if service.created_at else "-",
         expires_at=service.expires_at.strftime("%Y-%m-%d") if service.expires_at else "نامحدود",
-        link=service.subscription_link or "—",
+        link=link,
     )
 
 
@@ -88,6 +93,9 @@ async def regenerate_service(callback: CallbackQuery):
     service = await get_service(service_id)
     if not service or service.owner_telegram_id != callback.from_user.id:
         await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
+        return
+    if service.status != "active":
+        await callback.answer("سرویس فعال نیست.", show_alert=True)
         return
     try:
         panel_user = await panel_client.regenerate_subscription(service.panel_uuid or service.panel_username)
