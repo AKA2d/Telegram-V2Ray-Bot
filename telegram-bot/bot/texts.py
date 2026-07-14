@@ -139,6 +139,7 @@ PANEL_STATS = (
     "   آنلاین: {online_users}\n"
     "   محدود: {limited_users}\n"
     "   منقضی: {expired_users}\n\n"
+    "💾 ترافیک کل پنل: {panel_total_traffic}\n"
     "📤 ترافیک مصرف‌شده: {used_traffic}\n"
     "📦 ترافیک کل فروخته‌شده: {sold_traffic} گیگ\n"
     "💰 مبلغ کل فروش: {sold_amount} تومان\n"

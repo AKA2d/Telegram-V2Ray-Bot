@@ -38,7 +38,7 @@ async def show_stats(message: Message):
     if not is_admin(message.from_user.id):
         return
     total_users = active_users = disabled_users = online_users = limited_users = expired_users = "نامشخص"
-    used_traffic = "نامشخص"
+    used_traffic = panel_total_traffic = "نامشخص"
     try:
         stats = await panel_client.get_system_stats()
         total_users = stats.get("total_user", 0)
@@ -47,15 +47,19 @@ async def show_stats(message: Message):
         online_users = stats.get("online_users", 0)
         limited_users = stats.get("limited_users", 0)
         expired_users = stats.get("expired_users", 0)
+
         incoming = stats.get("incoming_bandwidth", 0)
         outgoing = stats.get("outgoing_bandwidth", 0)
         total_used = incoming + outgoing
         if total_used:
             used_gb = total_used / (1024**3)
-            if used_gb >= 1024:
-                used_traffic = f"{used_gb / 1024:.1f} ترابایت"
-            else:
-                used_traffic = f"{used_gb:.1f} گیگابایت"
+            used_traffic = f"{used_gb / 1024:.1f} ترابایت" if used_gb >= 1024 else f"{used_gb:.1f} گیگابایت"
+
+        admin_stats = await panel_client.get_admin_stats()
+        total_traffic = admin_stats.get("data_limit", 0)
+        if total_traffic:
+            tg = total_traffic / (1024**3)
+            panel_total_traffic = f"{tg / 1024:.1f} ترابایت" if tg >= 1024 else f"{tg:.1f} گیگابایت"
     except PanelAPIError:
         pass
 
@@ -71,6 +75,7 @@ async def show_stats(message: Message):
             online_users=online_users,
             limited_users=limited_users,
             expired_users=expired_users,
+            panel_total_traffic=panel_total_traffic,
             used_traffic=used_traffic,
             sold_traffic=sold_traffic,
             sold_amount=f"{int(sold_amount):,}",

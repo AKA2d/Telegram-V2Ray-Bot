@@ -102,6 +102,12 @@ class PasarGuardClient:
             raise PanelAPIError(f"Failed to get system stats: {resp.status_code} {resp.text}", resp.status_code)
         return resp.json()
 
+    async def get_admin_stats(self) -> dict:
+        resp = await self._request("GET", "/api/admin")
+        if resp.status_code != 200:
+            raise PanelAPIError(f"Failed to get admin stats: {resp.status_code} {resp.text}", resp.status_code)
+        return resp.json()
+
     # ---- user lifecycle ---------------------------------------------------
 
     async def create_active_user(
