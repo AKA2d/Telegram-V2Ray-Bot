@@ -113,6 +113,25 @@ async def regenerate_service(callback: CallbackQuery):
     await callback.answer()
 
 
+@router.callback_query(F.data.startswith("svc_qr:"))
+async def get_qr_code(callback: CallbackQuery):
+    service_id = int(callback.data.split(":")[1])
+    service = await get_service(service_id)
+    if not service or service.owner_telegram_id != callback.from_user.id:
+        await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
+        return
+    if not service.subscription_link:
+        await callback.answer("لینک اشتراک وجود ندارد.", show_alert=True)
+        return
+    if service.status != "active":
+        await callback.answer("سرویس فعال نیست.", show_alert=True)
+        return
+    from ..qr_gen import generate_qr_image
+    qr_photo = generate_qr_image(service.subscription_link)
+    await callback.message.answer_photo(qr_photo, caption="📱 QR Code لینک اشتراک")
+    await callback.answer()
+
+
 @router.callback_query(F.data.startswith("svc_increase:"))
 @router.callback_query(F.data.startswith("svc_extend:"))
 async def phase2_not_available(callback: CallbackQuery):

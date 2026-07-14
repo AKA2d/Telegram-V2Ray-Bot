@@ -61,7 +61,7 @@ def service_actions_keyboard(service_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=t.BTN_REGENERATE, callback_data=f"svc_regen:{service_id}")],
-            [InlineKeyboardButton(text=t.BTN_INCREASE_USERS, callback_data=f"svc_increase:{service_id}")],
+            [InlineKeyboardButton(text="📱 دریافت QR Code", callback_data=f"svc_qr:{service_id}")],
             [InlineKeyboardButton(text=t.BTN_EXTEND, callback_data=f"svc_extend:{service_id}")],
         ]
     )
