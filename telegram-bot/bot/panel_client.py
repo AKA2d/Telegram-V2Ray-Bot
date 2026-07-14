@@ -169,6 +169,10 @@ class PasarGuardClient:
             )
 
     async def regenerate_subscription(self, username_or_uuid: str) -> PanelUser:
+        # Get current user info before reset
+        old_user = await self.get_user(username_or_uuid)
+        old_sub = old_user.subscription_link
+
         resp = await self._request("POST", f"/api/user/{username_or_uuid}/reset")
         if resp.status_code != 200:
             raise PanelAPIError(
@@ -176,10 +180,32 @@ class PasarGuardClient:
                 resp.status_code,
             )
         data = resp.json()
+        new_sub = data.get("subscription_url")
+
+        # If reset didn't change the link, try delete + recreate approach
+        if new_sub == old_sub and old_sub:
+            # Delete old user and recreate with same settings
+            old_data = old_user.raw
+            await self.delete_user(username_or_uuid)
+            payload = {
+                "username": username_or_uuid,
+                "status": "active",
+                "data_limit": old_data.get("data_limit", 0),
+                "expire": old_data.get("expire", 0),
+                "proxies": old_data.get("proxies", {"vless": {}, "vmess": {}}),
+                "group_ids": old_data.get("group_ids", [2]),
+            }
+            if old_data.get("inbounds"):
+                payload["inbounds"] = old_data["inbounds"]
+            create_resp = await self._request("POST", "/api/user", json=payload)
+            if create_resp.status_code in (200, 201):
+                data = create_resp.json()
+                new_sub = data.get("subscription_url")
+
         return PanelUser(
             username=data.get("username", username_or_uuid),
             uuid=None,
-            subscription_link=data.get("subscription_url"),
+            subscription_link=new_sub,
             status=data.get("status", "active"),
             raw=data,
         )
