@@ -7,6 +7,7 @@ from ..keyboards import admin_menu_keyboard, main_menu
 from ..panel_client import PanelAPIError, panel_client
 from ..services_repo import count_all_services
 from ..settings_repo import get_setting, set_setting
+from ..stats_repo import get_period_stats
 
 router = Router(name="admin_entry")
 
@@ -66,6 +67,7 @@ async def show_stats(message: Message):
     sold_amount = await get_setting("sold_amount")
     sold_traffic = await get_setting("sold_traffic")
     service_count = await count_all_services()
+    period = await get_period_stats()
 
     await message.answer(
         t.PANEL_STATS.format(
@@ -77,8 +79,14 @@ async def show_stats(message: Message):
             expired_users=expired_users,
             panel_total_traffic=panel_total_traffic,
             used_traffic=used_traffic,
-            sold_traffic=sold_traffic,
+            daily_amount=period["daily_amount"],
+            daily_traffic=period["daily_traffic"],
+            weekly_amount=period["weekly_amount"],
+            weekly_traffic=period["weekly_traffic"],
+            monthly_amount=period["monthly_amount"],
+            monthly_traffic=period["monthly_traffic"],
             sold_amount=f"{int(sold_amount):,}",
+            sold_traffic=sold_traffic,
             service_count=service_count,
         ),
         reply_markup=admin_menu_keyboard(),

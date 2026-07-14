@@ -140,9 +140,12 @@ PANEL_STATS = (
     "   محدود: {limited_users}\n"
     "   منقضی: {expired_users}\n\n"
     "💾 ترافیک کل پنل: {panel_total_traffic}\n"
-    "📤 ترافیک مصرف‌شده: {used_traffic}\n"
-    "📦 ترافیک کل فروخته‌شده: {sold_traffic} گیگ\n"
-    "💰 مبلغ کل فروش: {sold_amount} تومان\n"
+    "📤 ترافیک مصرف‌شده: {used_traffic}\n\n"
+    "📈 فروش:\n"
+    "   امروز: {daily_amount} تومان / {daily_traffic} گیگ\n"
+    "   این هفته: {weekly_amount} تومان / {weekly_traffic} گیگ\n"
+    "   این ماه: {monthly_amount} تومان / {monthly_traffic} گیگ\n"
+    "   کل: {sold_amount} تومان / {sold_traffic} گیگ\n\n"
     "📦 تعداد کل سرویس‌ها: {service_count}"
 )
 
