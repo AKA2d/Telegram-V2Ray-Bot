@@ -158,7 +158,7 @@ async def extend_start(callback: CallbackQuery, state: FSMContext):
         await callback.answer("سرویس فعال نیست.", show_alert=True)
         return
 
-    remaining_days = _format_remaining_days(service.expires_at)
+    remaining_days = f"{_format_remaining_days(service.expires_at)} روز"
     remaining_traffic = f"{service.traffic_gb} گیگ"
     if service.status == "active":
         try:

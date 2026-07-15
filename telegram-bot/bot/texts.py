@@ -85,7 +85,7 @@ SERVICE_DETAIL = (
     "نام: {panel_username}\n"
     "پلن: {months} ماه / نامحدود کاربر / {traffic_gb} گیگ\n"
     "وضعیت: {status}\n"
-    "مدت باقی‌مانده: {remaining_days} روز\n"
+    "مدت باقی‌مانده: {remaining_days} \n"
     "ترافیک باقی‌مانده: {remaining_traffic}\n"
     "تاریخ خرید: {created_at}\n"
     "تاریخ انقضا: {expires_at}\n\n"
@@ -103,8 +103,8 @@ EXTEND_CONFIRM = (
     "آیا می‌خواهید سرویس #{id} را تمدید کنید؟\n\n"
     "مدت باقی‌مانده: {remaining_days}\n"
     "ترافیک باقی‌مانده: {remaining_traffic}\n\n"
-    "پلن تمدید را انتخاب کنید:"
 )
+
 EXTEND_PLAN_SUMMARY = (
     "📦 خلاصه تمدید سرویس #{id}\n\n"
     "پلن: {plan_name}\n"
@@ -233,7 +233,7 @@ CUSTOMER_SERVICE_DETAIL = (
     "پنل یوزرنیم: {panel_username}\n"
     "پلن: {months} ماه / نامحدود کاربر / {traffic_gb} گیگ\n"
     "وضعیت: {status}\n"
-    "مدت باقی‌مانده: {remaining_days} روز\n"
+    "مدت باقی‌مانده: {remaining_days} \n"
     "ترافیک باقی‌مانده: {remaining_traffic}\n"
     "تاریخ خرید: {created_at}\n"
     "تاریخ انقضا: {expires_at}\n\n"

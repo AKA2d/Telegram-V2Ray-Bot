@@ -76,7 +76,7 @@ def services_list_keyboard(services: list) -> InlineKeyboardMarkup:
 
 
 def admin_test_keyboard(test_enabled: bool) -> InlineKeyboardMarkup:
-    status = "غیرفعال" if test_enabled else "فعال"
+    status = "فعال" if test_enabled else "غیرفعال"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=f"وضعیت: {status}", callback_data="test_toggle")],
