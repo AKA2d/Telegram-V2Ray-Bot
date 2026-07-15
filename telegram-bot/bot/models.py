@@ -42,7 +42,7 @@ class Service(Base):
     status: Mapped[str] = mapped_column(String(32), default="pending_payment")
     user_count: Mapped[int] = mapped_column(Integer, default=1)
     months: Mapped[int] = mapped_column(Integer, default=1)
-    traffic_gb: Mapped[int] = mapped_column(Integer, default=10)
+    traffic_gb: Mapped[float] = mapped_column(Numeric(10, 2), default=10)
     price: Mapped[Decimal] = mapped_column(Numeric(14, 0), default=0)
     has_tunnel: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -58,7 +58,7 @@ class Order(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     telegram_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.telegram_id"))
     service_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("services.id"), nullable=True)
-    type: Mapped[str] = mapped_column(String(32))  # new_service | wallet_topup
+    type: Mapped[str] = mapped_column(String(32))
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 0), default=0)
     status: Mapped[str] = mapped_column(String(32), default="awaiting_receipt")
     receipt_text: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -90,7 +90,7 @@ class Plan(Base):
     name: Mapped[str] = mapped_column(String(255))
     user_count: Mapped[int] = mapped_column(Integer, default=1)
     months: Mapped[int] = mapped_column(Integer, default=1)
-    traffic_gb: Mapped[int] = mapped_column(Integer, default=10)
+    traffic_gb: Mapped[float] = mapped_column(Numeric(10, 2), default=10)
     price: Mapped[Decimal] = mapped_column(Numeric(14, 0), default=0)
     wholesale_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 0), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -124,3 +124,10 @@ class WalletAuditLog(Base):
     new_balance: Mapped[Decimal] = mapped_column(Numeric(14, 0))
     reason: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TestServiceUsage(Base):
+    __tablename__ = "test_service_usage"
+
+    telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    used_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

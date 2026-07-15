@@ -9,6 +9,9 @@ DEFAULTS: dict[str, str] = {
     "sales_closed": "0",
     "sold_amount": "0",
     "sold_traffic": "0",
+    "test_traffic_gb": "1",
+    "test_days": "1",
+    "test_enabled": "1",
 }
 
 

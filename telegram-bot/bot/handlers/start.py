@@ -1,3 +1,6 @@
+import uuid
+from datetime import datetime, timedelta, timezone
+
 from aiogram import F, Router
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
@@ -7,6 +10,9 @@ from .. import texts as t
 from ..config import is_admin, REQUIRED_CHANNEL_ID
 from ..keyboards import join_channel_keyboard, main_menu, SUPPORT_USERNAME
 from ..membership import is_channel_member
+from ..panel_client import PanelAPIError, panel_client
+from ..services_repo import create_service
+from ..test_repo import get_test_settings, has_used_test, mark_test_used
 from ..users_repo import get_or_create_user
 
 router = Router(name="start")
@@ -51,3 +57,56 @@ async def support(message: Message):
     await message.answer(
         f"برای پشتیبانی با ادمین در تماس باشید:\n@{SUPPORT_USERNAME}",
     )
+
+
+@router.message(F.text == t.MAIN_MENU_TEST)
+async def get_test_service(message: Message):
+    user_id = message.from_user.id
+    is_user_admin = is_admin(user_id)
+
+    test_settings = await get_test_settings()
+    if not test_settings["enabled"]:
+        await message.answer(t.TEST_NOT_AVAILABLE, reply_markup=main_menu(is_user_admin))
+        return
+
+    if await has_used_test(user_id):
+        await message.answer(t.TEST_ALREADY_USED, reply_markup=main_menu(is_user_admin))
+        return
+
+    panel_username = f"test_{user_id}_{uuid.uuid4().hex[:6]}"
+    data_limit_bytes = int(test_settings["traffic_gb"] * 1024**3)
+    duration_seconds = test_settings["days"] * 86400
+
+    try:
+        panel_user = await panel_client.create_active_user(
+            username=panel_username,
+            data_limit_bytes=data_limit_bytes,
+            duration_seconds=duration_seconds,
+        )
+    except PanelAPIError as exc:
+        await message.answer(t.ERROR_GENERIC, reply_markup=main_menu(is_user_admin))
+        return
+
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)
+    await create_service(
+        owner_telegram_id=user_id,
+        panel_username=panel_user.username,
+        panel_uuid=panel_user.uuid,
+        subscription_link=panel_user.subscription_link,
+        status="active",
+        user_count=1,
+        months=test_settings["days"],
+        traffic_gb=test_settings["traffic_gb"],
+        price=0,
+        expires_at=expires_at,
+    )
+
+    await mark_test_used(user_id)
+
+    from ..qr_gen import generate_qr_image
+    text = t.TEST_ACTIVATED.format(link=panel_user.subscription_link or "—")
+    if panel_user.subscription_link:
+        qr_photo = generate_qr_image(panel_user.subscription_link)
+        await message.answer_photo(qr_photo, caption=text, reply_markup=main_menu(is_user_admin))
+    else:
+        await message.answer(text, reply_markup=main_menu(is_user_admin))

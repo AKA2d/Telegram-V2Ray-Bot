@@ -16,6 +16,12 @@ class ManageService(StatesGroup):
     search = State()
 
 
+class ExtendService(StatesGroup):
+    confirm = State()
+    choosing_plan = State()
+    confirm_plan = State()
+
+
 class ConnectGuide(StatesGroup):
     platform = State()
     app = State()

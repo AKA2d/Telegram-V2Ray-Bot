@@ -211,7 +211,7 @@ async def add_service_confirm(callback: CallbackQuery, state: FSMContext):
     telegram_id = data["cust_id"]
 
     panel_username = f"tg{telegram_id}_{uuid.uuid4().hex[:6]}"
-    data_limit_bytes = plan.traffic_gb * 1024**3
+    data_limit_bytes = int(plan.traffic_gb * 1024**3)
     duration_seconds = plan.months * 30 * 86400
 
     try:

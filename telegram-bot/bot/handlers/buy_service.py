@@ -169,7 +169,7 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
 async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan, effective_price: int) -> None:
     telegram_id = callback.from_user.id
     panel_username = _gen_panel_username(telegram_id)
-    data_limit_bytes = plan.traffic_gb * 1024**3
+    data_limit_bytes = int(plan.traffic_gb * 1024**3)
     duration_seconds = plan.months * 30 * 86400
 
     try:

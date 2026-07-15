@@ -61,11 +61,11 @@ async def approve_order(callback: CallbackQuery):
     if order.type == "new_service" and order.service_id:
         service = await get_service(order.service_id)
         # Increment sold traffic for stats tracking
-        current_traffic = int(await get_setting("sold_traffic"))
-        await set_setting("sold_traffic", str(current_traffic + service.traffic_gb))
+        current_traffic = int(float(await get_setting("sold_traffic")))
+        await set_setting("sold_traffic", str(current_traffic + float(service.traffic_gb)))
         try:
             duration_seconds = service.months * 30 * 86400
-            data_limit_bytes = service.traffic_gb * 1024**3
+            data_limit_bytes = int(service.traffic_gb * 1024**3)
             panel_user = await panel_client.create_active_user(
                 username=service.panel_username,
                 data_limit_bytes=data_limit_bytes,
@@ -111,6 +111,20 @@ async def approve_order(callback: CallbackQuery):
             await session.commit()
             new_balance = user.wallet_balance
         await callback.bot.send_message(order.telegram_id, t.WALLET_TOPUP_APPROVED_CUSTOMER.format(balance=int(new_balance)))
+
+    elif order.type == "extend_service" and order.service_id:
+        import json
+        from ..manage_service import _apply_extend
+        extend_details_str = await get_setting(f"extend_order_{order.id}")
+        extend_details = json.loads(extend_details_str) if extend_details_str else {}
+        service = await get_service(order.service_id)
+        if service:
+            await _apply_extend(
+                service,
+                extend_details.get("add_months", 0),
+                extend_details.get("add_traffic", 0),
+            )
+            await callback.bot.send_message(order.telegram_id, t.EXTEND_SUCCESS)
 
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.answer("تایید شد")

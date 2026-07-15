@@ -1,6 +1,7 @@
 # All customer-facing and admin-facing copy lives here in Persian.
 
 MAIN_MENU_BUY = "🛒 خرید سرویس"
+MAIN_MENU_TEST = "🧪 سرویس رایگان"
 MAIN_MENU_MANAGE = "⚙️ مدیریت سرویس"
 MAIN_MENU_ACCOUNT = "👤 اطلاعات حساب"
 MAIN_MENU_TOPUP = "💳 شارژ حساب"
@@ -98,6 +99,23 @@ BTN_EXTEND = "⏳ تمدید سرویس"
 REGENERATE_DONE = "لینک اشتراک با موفقیت تغییر کرد:\n{link}"
 PHASE2_NOT_AVAILABLE = "این قابلیت به زودی فعال می‌شود."
 
+EXTEND_CONFIRM = (
+    "آیا می‌خواهید سرویس #{id} را تمدید کنید؟\n\n"
+    "مدت باقی‌مانده: {remaining_days}\n"
+    "ترافیک باقی‌مانده: {remaining_traffic}\n\n"
+    "پلن تمدید را انتخاب کنید:"
+)
+EXTEND_PLAN_SUMMARY = (
+    "📦 خلاصه تمدید سرویس #{id}\n\n"
+    "پلن: {plan_name}\n"
+    "📅 مدت اضافه‌شده: {months} ماه\n"
+    "🌐 ترافیک اضافه‌شده: {traffic_gb} گیگ\n"
+    "💰 مبلغ: {price} تومان\n\n"
+    "آیا تایید می‌کنید؟"
+)
+EXTEND_SUCCESS = "سرویس با موفقیت تمدید شد ✅"
+EXTEND_CANCELLED = "تمدید لغو شد."
+
 ACCOUNT_INFO = (
     "👤 اطلاعات حساب شما:\n\n"
     "تعداد کل سرویس‌های خریداری‌شده: {total_services}\n"
@@ -129,6 +147,16 @@ ADMIN_MENU_CARDS = "🏦 مدیریت کارت‌ها"
 ADMIN_MENU_TUNNEL = "🚇 مدیریت تانل"
 ADMIN_MENU_WHOLESALERS = "🛍️ مدیریت عمده‌فروشان"
 ADMIN_MENU_STATS = "📊 آمار پنل"
+ADMIN_MENU_TEST = "🧪 مدیریت سرویس تست"
+
+TEST_ALREADY_USED = "شما قبلاً از سرویس رایگان استفاده کرده‌اید."
+TEST_NOT_AVAILABLE = "سرویس رایگان در حال حاضر غیرفعال است."
+TEST_ACTIVATED = "سرویس رایگان شما فعال شد!\n\n🔗 لینک اشتراک:\n{link}"
+TEST_CLEARED = "لیست کاربران تست پاک شد. {count} کاربر حذف شد."
+TEST_SETTINGS_HEADER = "تنظیمات سرویس تست:"
+TEST_SETTINGS_UPDATED = "تنظیمات سرویس تست به‌روزرسانی شد."
+ASK_TEST_TRAFFIC = "ترافیک سرویس تست (گیگابایت) را وارد کنید:"
+ASK_TEST_DAYS = "مدت سرویس تست (روز) را وارد کنید:"
 
 PANEL_STATS = (
     "📊 آمار پنل\n\n"

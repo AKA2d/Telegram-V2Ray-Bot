@@ -34,7 +34,7 @@ async def _sum_orders_and_traffic(start_date: datetime) -> tuple[int, int]:
         )
         traffic = result.scalar() or 0
 
-    return int(amount), int(traffic)
+    return int(amount), int(float(traffic))
 
 
 async def get_period_stats() -> dict:

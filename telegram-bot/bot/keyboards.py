@@ -8,7 +8,8 @@ SUPPORT_USERNAME = "GodVPN_admin"
 
 def main_menu(is_admin: bool = False) -> ReplyKeyboardMarkup:
     rows = [
-        [KeyboardButton(text=t.MAIN_MENU_BUY), KeyboardButton(text=t.MAIN_MENU_MANAGE)],
+        [KeyboardButton(text=t.MAIN_MENU_BUY), KeyboardButton(text=t.MAIN_MENU_TEST)],
+        [KeyboardButton(text=t.MAIN_MENU_MANAGE)],
         [KeyboardButton(text=t.MAIN_MENU_ACCOUNT), KeyboardButton(text=t.MAIN_MENU_TOPUP)],
         [KeyboardButton(text=t.MAIN_MENU_CONNECT)],
         [KeyboardButton(text=t.MAIN_MENU_SUPPORT)],
@@ -74,6 +75,19 @@ def services_list_keyboard(services: list) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def admin_test_keyboard(test_enabled: bool) -> InlineKeyboardMarkup:
+    status = "غیرفعال" if test_enabled else "فعال"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=f"وضعیت: {status}", callback_data="test_toggle")],
+            [InlineKeyboardButton(text="⏱ تغییر مدت", callback_data="test_edit_days")],
+            [InlineKeyboardButton(text="🌐 تغییر ترافیک", callback_data="test_edit_traffic")],
+            [InlineKeyboardButton(text="🗑 پاک کردن لیست کاربران", callback_data="test_clear_users")],
+            [InlineKeyboardButton(text=t.BTN_BACK, callback_data="cust_back")],
+        ]
+    )
+
+
 def admin_menu_keyboard(sales_closed: bool | None = None) -> ReplyKeyboardMarkup:
     if sales_closed is None:
         import asyncio
@@ -91,6 +105,7 @@ def admin_menu_keyboard(sales_closed: bool | None = None) -> ReplyKeyboardMarkup
         [KeyboardButton(text=t.ADMIN_MENU_BROADCAST), KeyboardButton(text=t.ADMIN_MENU_DIRECT)],
         [KeyboardButton(text=t.ADMIN_MENU_CARDS), KeyboardButton(text=t.ADMIN_MENU_TUNNEL)],
         [KeyboardButton(text=t.ADMIN_MENU_WHOLESALERS), KeyboardButton(text=t.ADMIN_MENU_STATS)],
+        [KeyboardButton(text=t.ADMIN_MENU_TEST)],
         [KeyboardButton(text=status_text)],
         [KeyboardButton(text=t.BTN_BACK)],
     ]
@@ -117,6 +132,24 @@ def plan_confirm_keyboard(plan_type: str, plan_id: int) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text=t.CONFIRM_YES, callback_data=f"plan_confirm:{plan_type}:{plan_id}")],
             [InlineKeyboardButton(text=t.CONFIRM_NO, callback_data="plan_cancel")],
+        ]
+    )
+
+
+def extend_confirm_keyboard(service_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=t.CONFIRM_YES, callback_data=f"extend_confirm:yes:{service_id}")],
+            [InlineKeyboardButton(text=t.CONFIRM_NO, callback_data=f"extend_confirm:no:{service_id}")],
+        ]
+    )
+
+
+def extend_final_keyboard(plan_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=t.CONFIRM_YES, callback_data=f"extend_final:yes:{plan_id}")],
+            [InlineKeyboardButton(text=t.CONFIRM_NO, callback_data=f"extend_final:no:{plan_id}")],
         ]
     )
 

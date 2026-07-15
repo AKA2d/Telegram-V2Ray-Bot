@@ -168,6 +168,13 @@ class PasarGuardClient:
                 resp.status_code,
             )
 
+    async def update_user_limits(self, username_or_uuid: str, data_limit_bytes: int, expire: int) -> None:
+        """Update a user's data limit and expiry on the panel."""
+        await self._modify_status(username_or_uuid, {
+            "data_limit": data_limit_bytes,
+            "expire": expire,
+        })
+
     async def regenerate_subscription(self, username_or_uuid: str) -> PanelUser:
         # Get current user info before reset
         old_user = await self.get_user(username_or_uuid)
