@@ -14,42 +14,45 @@ from ..panel_client import PanelAPIError, panel_client
 from ..services_repo import create_service
 from ..test_repo import get_test_settings, has_used_test, mark_test_used
 from ..users_repo import get_or_create_user
+from ..wholesalers_repo import is_wholesaler
 
 router = Router(name="start")
+
+
+def _user_menu(user_id: int):
+    return main_menu(is_admin=is_admin(user_id), is_wholesaler=is_wholesaler(user_id))
 
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
     await get_or_create_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
-    await message.answer(t.WELCOME, reply_markup=main_menu(is_admin(message.from_user.id)))
+    await message.answer(t.WELCOME, reply_markup=_user_menu(message.from_user.id))
     if REQUIRED_CHANNEL_ID and not await is_channel_member(message.bot, message.from_user.id):
         await message.answer(t.JOIN_CHANNEL_PROMPT, reply_markup=join_channel_keyboard(REQUIRED_CHANNEL_ID))
         return
-
-        
 
 
 @router.callback_query(F.data == "check_membership")
 async def check_membership(callback: CallbackQuery):
     if await is_channel_member(callback.bot, callback.from_user.id):
-        await callback.message.answer(t.WELCOME, reply_markup=main_menu(is_admin(callback.from_user.id)))
+        await callback.message.answer(t.WELCOME, reply_markup=_user_menu(callback.from_user.id))
         await callback.answer()
     else:
-        await callback.message.answer(t.WELCOME, reply_markup=main_menu(is_admin(callback.from_user.id)))
+        await callback.message.answer(t.WELCOME, reply_markup=_user_menu(callback.from_user.id))
         await callback.answer(t.NOT_MEMBER_YET, show_alert=True)
 
 
 @router.message(F.text == t.BTN_BACK)
 async def back_to_main(message: Message, state: FSMContext):
     await state.clear()
-    await message.answer(t.WELCOME, reply_markup=main_menu(is_admin(message.from_user.id)))
+    await message.answer(t.WELCOME, reply_markup=_user_menu(message.from_user.id))
 
 
 @router.message(F.text == t.BTN_CANCEL_FLOW)
 async def cancel_flow(message: Message, state: FSMContext):
     await state.clear()
-    await message.answer(t.CANCELLED, reply_markup=main_menu(is_admin(message.from_user.id)))
+    await message.answer(t.CANCELLED, reply_markup=_user_menu(message.from_user.id))
 
 
 @router.message(F.text == t.MAIN_MENU_SUPPORT)
@@ -57,6 +60,21 @@ async def support(message: Message):
     await message.answer(
         f"برای پشتیبانی با ادمین در تماس باشید:\n@{SUPPORT_USERNAME}",
     )
+
+
+@router.message(F.text == t.MAIN_MENU_WHOLESALER_STATS)
+async def show_wholesaler_stats(message: Message):
+    from ..wholesalers_repo import get_wholesaler_stats
+    stats = await get_wholesaler_stats(message.from_user.id)
+    text = (
+        f"📊 آمار شما\n\n"
+        f"📦 کل سرویس‌ها: {stats['total_services']}\n"
+        f"✅ سرویس‌های فعال: {stats['active_services']}\n"
+        f"💰 کل فروش: {stats['total_revenue']:,} تومان\n"
+        f"🌐 کل ترافیک: {stats['total_traffic']} گیگ\n"
+        f"💳 موجودی کیف پول: {stats['wallet_balance']:,} تومان"
+    )
+    await message.answer(text, reply_markup=_user_menu(message.from_user.id))
 
 
 @router.message(F.text == t.MAIN_MENU_TEST)

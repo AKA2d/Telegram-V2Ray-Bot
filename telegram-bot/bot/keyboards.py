@@ -6,7 +6,7 @@ from . import texts as t
 SUPPORT_USERNAME = "GodVPN_admin"
 
 
-def main_menu(is_admin: bool = False) -> ReplyKeyboardMarkup:
+def main_menu(is_admin: bool = False, is_wholesaler: bool = False) -> ReplyKeyboardMarkup:
     rows = [
         [KeyboardButton(text=t.MAIN_MENU_BUY), KeyboardButton(text=t.MAIN_MENU_TEST)],
         [KeyboardButton(text=t.MAIN_MENU_MANAGE)],
@@ -14,6 +14,8 @@ def main_menu(is_admin: bool = False) -> ReplyKeyboardMarkup:
         [KeyboardButton(text=t.MAIN_MENU_CONNECT)],
         [KeyboardButton(text=t.MAIN_MENU_SUPPORT)],
     ]
+    if is_wholesaler:
+        rows.append([KeyboardButton(text=t.MAIN_MENU_WHOLESALER_STATS)])
     if is_admin:
         rows.append([KeyboardButton(text=t.ADMIN_MENU)])
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)

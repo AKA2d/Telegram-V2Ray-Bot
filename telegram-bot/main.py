@@ -26,6 +26,7 @@ from bot.handlers import (
     wallet,
 )
 from bot.handlers.admin import router as admin_router
+from bot.scheduler import start_scheduler
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -105,6 +106,7 @@ async def main() -> None:
     dp = Dispatcher(storage=MemoryStorage())
 
     _setup_handlers(dp)
+    start_scheduler(bot)
 
     if WEBHOOK_MODE:
         await _run_webhook(bot, dp)

@@ -3,6 +3,7 @@
 MAIN_MENU_BUY = "🛒 خرید سرویس"
 MAIN_MENU_TEST = "🧪 سرویس رایگان"
 MAIN_MENU_MANAGE = "⚙️ مدیریت سرویس"
+MAIN_MENU_WHOLESALER_STATS = "📊 آمار من"
 MAIN_MENU_ACCOUNT = "👤 اطلاعات حساب"
 MAIN_MENU_TOPUP = "💳 شارژ حساب"
 MAIN_MENU_CONNECT = "📱 روش اتصال"
