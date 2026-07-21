@@ -19,15 +19,15 @@ from ..wholesalers_repo import is_wholesaler
 router = Router(name="start")
 
 
-def _user_menu(user_id: int):
-    return main_menu(is_admin=is_admin(user_id), is_wholesaler=is_wholesaler(user_id))
+async def _user_menu(user_id: int):
+    return main_menu(is_admin=is_admin(user_id), is_wholesaler=await is_wholesaler(user_id))
 
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
     await get_or_create_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
-    await message.answer(t.WELCOME, reply_markup=_user_menu(message.from_user.id))
+    await message.answer(t.WELCOME, reply_markup=await _user_menu(message.from_user.id))
     if REQUIRED_CHANNEL_ID and not await is_channel_member(message.bot, message.from_user.id):
         await message.answer(t.JOIN_CHANNEL_PROMPT, reply_markup=join_channel_keyboard(REQUIRED_CHANNEL_ID))
         return
@@ -36,23 +36,23 @@ async def cmd_start(message: Message, state: FSMContext):
 @router.callback_query(F.data == "check_membership")
 async def check_membership(callback: CallbackQuery):
     if await is_channel_member(callback.bot, callback.from_user.id):
-        await callback.message.answer(t.WELCOME, reply_markup=_user_menu(callback.from_user.id))
+        await callback.message.answer(t.WELCOME, reply_markup=await _user_menu(callback.from_user.id))
         await callback.answer()
     else:
-        await callback.message.answer(t.WELCOME, reply_markup=_user_menu(callback.from_user.id))
+        await callback.message.answer(t.WELCOME, reply_markup=await _user_menu(callback.from_user.id))
         await callback.answer(t.NOT_MEMBER_YET, show_alert=True)
 
 
 @router.message(F.text == t.BTN_BACK)
 async def back_to_main(message: Message, state: FSMContext):
     await state.clear()
-    await message.answer(t.WELCOME, reply_markup=_user_menu(message.from_user.id))
+    await message.answer(t.WELCOME, reply_markup=await _user_menu(message.from_user.id))
 
 
 @router.message(F.text == t.BTN_CANCEL_FLOW)
 async def cancel_flow(message: Message, state: FSMContext):
     await state.clear()
-    await message.answer(t.CANCELLED, reply_markup=_user_menu(message.from_user.id))
+    await message.answer(t.CANCELLED, reply_markup=await _user_menu(message.from_user.id))
 
 
 @router.message(F.text == t.MAIN_MENU_SUPPORT)
@@ -74,7 +74,68 @@ async def show_wholesaler_stats(message: Message):
         f"🌐 کل ترافیک: {stats['total_traffic']} گیگ\n"
         f"💳 موجودی کیف پول: {stats['wallet_balance']:,} تومان"
     )
-    await message.answer(text, reply_markup=_user_menu(message.from_user.id))
+    await message.answer(text, reply_markup=await _user_menu(message.from_user.id))
+
+
+@router.message(F.text == t.MAIN_MENU_BECOME_WHOLESALER)
+async def request_wholesaler(message: Message):
+    from ..db import async_session
+    from ..models import User
+    from ..settings_repo import get_setting
+    from ..keyboards import confirm_keyboard
+
+    fee = int(await get_setting("wholesaler_fee"))
+    async with async_session() as session:
+        user = await session.get(User, message.from_user.id)
+        balance = int(user.wallet_balance) if user else 0
+
+    await message.answer(
+        t.WHOLESALER_REQUEST_INFO.format(fee=fee, balance=balance),
+        reply_markup=confirm_keyboard(),
+    )
+
+
+@router.message(F.text == t.BTN_CONFIRM)
+async def confirm_wholesaler_request(message: Message):
+    from ..db import async_session
+    from ..models import User, WalletAuditLog
+    from ..settings_repo import get_setting
+    from ..wholesalers_repo import create_wholesaler, is_wholesaler
+
+    # Check if already a wholesaler
+    if await is_wholesaler(message.from_user.id):
+        await message.answer("شما از قبل عمده‌فروش هستید.", reply_markup=await _user_menu(message.from_user.id))
+        return
+
+    fee = int(await get_setting("wholesaler_fee"))
+    async with async_session() as session:
+        user = await session.get(User, message.from_user.id)
+        balance = int(user.wallet_balance) if user else 0
+
+    if balance >= fee:
+        # Deduct fee and become wholesaler
+        async with async_session() as session:
+            user = await session.get(User, message.from_user.id)
+            old_balance = user.wallet_balance
+            user.wallet_balance = old_balance - fee
+            session.add(
+                WalletAuditLog(
+                    telegram_id=message.from_user.id,
+                    old_balance=old_balance,
+                    new_balance=user.wallet_balance,
+                    reason="wholesaler fee",
+                )
+            )
+            await session.commit()
+
+        await create_wholesaler(message.from_user.id)
+        await message.answer(t.WHOLESALER_REQUEST_ACCEPTED, reply_markup=await _user_menu(message.from_user.id))
+    else:
+        deficit = fee - balance
+        await message.answer(
+            t.WHOLESALER_REQUEST_INSUFFICIENT.format(balance=balance, fee=fee, deficit=deficit),
+            reply_markup=await _user_menu(message.from_user.id),
+        )
 
 
 @router.message(F.text == t.MAIN_MENU_TEST)

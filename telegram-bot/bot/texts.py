@@ -4,6 +4,22 @@ MAIN_MENU_BUY = "🛒 خرید سرویس"
 MAIN_MENU_TEST = "🧪 سرویس رایگان"
 MAIN_MENU_MANAGE = "⚙️ مدیریت سرویس"
 MAIN_MENU_WHOLESALER_STATS = "📊 آمار من"
+MAIN_MENU_BECOME_WHOLESALER = "🏷️ تبدیل به عمده‌فروش"
+
+WHOLESALER_REQUEST_INFO = (
+    "🏷️ تبدیل به عمده‌فروش\n\n"
+    "برای تبدیل شدن به عمده‌فروش، باید مبلغ {fee:,} تومان به کیف پول خود اضافه کنید.\n\n"
+    "موجودی فعلی شما: {balance:,} تومان\n\n"
+    "آیا مطمئن هید که می‌خواهید درخواست دهید؟"
+)
+WHOLESALER_REQUEST_ACCEPTED = "شما با موفقیت به عمده‌فروش تبدیل شدید! 🎉"
+WHOLESALER_REQUEST_INSUFFICIENT = (
+    "موجودی کیف پول شما کافی نیست.\n\n"
+    "موجودی فعلی: {balance:,} تومان\n"
+    "مورد نیاز: {fee:,} تومان\n"
+    "کمبود: {deficit:,} تومان\n\n"
+    "لطفاً ابتدا کیف پول خود را شارژ کنید."
+)
 MAIN_MENU_ACCOUNT = "👤 اطلاعات حساب"
 MAIN_MENU_TOPUP = "💳 شارژ حساب"
 MAIN_MENU_CONNECT = "📱 روش اتصال"
@@ -175,7 +191,8 @@ PANEL_STATS = (
     "   این هفته: {weekly_amount} تومان / {weekly_traffic} گیگ\n"
     "   این ماه: {monthly_amount} تومان / {monthly_traffic} گیگ\n"
     "   کل: {sold_amount} تومان / {sold_traffic} گیگ\n\n"
-    "📦 تعداد کل سرویس‌ها: {service_count}"
+    "📦 تعداد کل سرویس‌ها: {service_count}\n"
+    "🏷️ هزینه عمده‌فروشی: {wholesaler_fee} تومان"
 )
 
 SALES_CLOSED_ON = "فروش بسته شد. کاربران دیگر قادر به خرید یا شارژ نیستند."

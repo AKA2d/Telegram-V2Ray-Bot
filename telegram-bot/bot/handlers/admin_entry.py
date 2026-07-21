@@ -1,9 +1,10 @@
 from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from .. import texts as t
 from ..config import is_admin
-from ..keyboards import admin_menu_keyboard, main_menu
+from ..keyboards import admin_menu_keyboard, cancel_keyboard, main_menu
 from ..panel_client import PanelAPIError, panel_client
 from ..services_repo import count_all_services
 from ..settings_repo import get_setting, set_setting
@@ -66,6 +67,7 @@ async def show_stats(message: Message):
 
     sold_amount = await get_setting("sold_amount")
     sold_traffic = await get_setting("sold_traffic")
+    wholesaler_fee = await get_setting("wholesaler_fee")
     service_count = await count_all_services()
     period = await get_period_stats()
 
@@ -88,6 +90,40 @@ async def show_stats(message: Message):
             sold_amount=f"{int(sold_amount):,}",
             sold_traffic=sold_traffic,
             service_count=service_count,
+            wholesaler_fee=f"{int(wholesaler_fee):,}",
         ),
         reply_markup=admin_menu_keyboard(),
     )
+
+
+@router.message(F.text == t.ADMIN_MENU_TEST)
+async def open_test_menu(message: Message):
+    from .admin.test_mgmt import _show_test_settings
+    await _show_test_settings(message)
+
+
+# ---- Wholesaler fee management ----
+
+@router.message(F.text == "💰 تنظیم هزینه عمده‌فروش")
+async def prompt_set_wholesaler_fee(message: Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+    await state.set_state("set_wholesaler_fee")
+    current = await get_setting("wholesaler_fee")
+    await message.answer(f"هزینه فعلی عمده‌فروشی: {int(current):,} تومان\n\nمبلغ جدید را وارد کنید:", reply_markup=cancel_keyboard())
+
+
+@router.message(F.text == "💰 تنظیم هزینه عمده‌فروش")
+async def set_wholesaler_fee(message: Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+    try:
+        value = int(message.text.strip())
+        if value <= 0:
+            raise ValueError
+    except ValueError:
+        await message.answer(t.INVALID_NUMBER)
+        return
+    await set_setting("wholesaler_fee", str(value))
+    await state.clear()
+    await message.answer(f"هزینه عمده‌فروشی به {value:,} تومان تغییر کرد.", reply_markup=admin_menu_keyboard())

@@ -12,6 +12,7 @@ DEFAULTS: dict[str, str] = {
     "test_traffic_gb": "1",
     "test_days": "1",
     "test_enabled": "1",
+    "wholesaler_fee": "1000000",
 }
 
 
