@@ -96,12 +96,20 @@ async def list_customer_services(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("cust_svc_view:"))
-async def view_customer_service(callback: CallbackQuery):
+async def view_customer_service(callback: CallbackQuery, state: FSMContext = None):
     _, telegram_id, service_id = callback.data.split(":")
     telegram_id, service_id = int(telegram_id), int(service_id)
     service = await get_service(service_id)
     if not service or service.owner_telegram_id != telegram_id:
         await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
+        return
+
+    if service.status == "deleted":
+        await callback.message.edit_text(
+            f"📦 سرویس #{service_id}\n\n⚠️ این سرویس از پنل حذف شده است.\nنام: {service.panel_username}",
+            reply_markup=customer_service_actions_keyboard(telegram_id, service_id, "deleted"),
+        )
+        await callback.answer()
         return
 
     remaining_days = "نامحدود"
@@ -112,15 +120,16 @@ async def view_customer_service(callback: CallbackQuery):
         remaining_days = "منقضی شده" if delta.days <= 0 else f"{delta.days} روز"
 
     remaining_traffic = f"{service.traffic_gb} گیگ"
-    try:
-        panel_user = await panel_client.get_user(service.panel_username)
-        bytes_used = panel_user.raw.get("usage") or panel_user.raw.get("data_usage") or panel_user.raw.get("used_traffic")
-        if bytes_used:
-            used_gb = bytes_used / (1024 ** 3)
-            remaining = max(0, service.traffic_gb - used_gb)
-            remaining_traffic = f"{remaining:.1f} از {service.traffic_gb} گیگ"
-    except PanelAPIError:
-        pass
+    if service.status == "active":
+        try:
+            panel_user = await panel_client.get_user(service.panel_username)
+            bytes_used = panel_user.raw.get("usage") or panel_user.raw.get("data_usage") or panel_user.raw.get("used_traffic")
+            if bytes_used:
+                used_gb = bytes_used / (1024 ** 3)
+                remaining = max(0, float(service.traffic_gb) - used_gb)
+                remaining_traffic = f"{remaining:.1f} از {service.traffic_gb} گیگ"
+        except PanelAPIError:
+            pass
 
     text = t.CUSTOMER_SERVICE_DETAIL.format(
         id=service.id,
@@ -134,7 +143,7 @@ async def view_customer_service(callback: CallbackQuery):
         expires_at=service.expires_at.strftime("%Y-%m-%d") if service.expires_at else "نامحدود",
         link=service.subscription_link or "—",
     )
-    await callback.message.edit_text(text, reply_markup=customer_service_actions_keyboard(telegram_id, service_id))
+    await callback.message.edit_text(text, reply_markup=customer_service_actions_keyboard(telegram_id, service_id, service.status))
     await callback.answer()
 
 
@@ -146,19 +155,28 @@ async def disable_customer_service(callback: CallbackQuery):
     if not service or service.owner_telegram_id != telegram_id:
         await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
         return
-    try:
-        await panel_client.disable_user(service.panel_username)
-    except PanelAPIError as exc:
-        logger.exception("Failed to disable panel user %s", service.panel_username)
-        await callback.answer(f"خطا در پنل: {exc}", show_alert=True)
-        return
-    await update_service(service_id, status="disabled")
-    await callback.answer(t.CUSTOMER_SERVICE_DISABLED.format(id=service_id), show_alert=True)
-    services = await list_user_services(telegram_id)
+    from ...keyboards import confirm_action_keyboard
     await callback.message.edit_text(
-        t.CUSTOMER_SERVICES_HEADER.format(telegram_id=telegram_id),
-        reply_markup=customer_services_keyboard(telegram_id, services),
+        f"آیا مطمئن هستید که می‌خواهید سرویس #{service_id} را غیرفعال کنید؟",
+        reply_markup=confirm_action_keyboard("disable", telegram_id, service_id),
     )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("cust_svc_enable:"))
+async def enable_customer_service(callback: CallbackQuery):
+    _, telegram_id, service_id = callback.data.split(":")
+    telegram_id, service_id = int(telegram_id), int(service_id)
+    service = await get_service(service_id)
+    if not service or service.owner_telegram_id != telegram_id:
+        await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
+        return
+    from ...keyboards import confirm_action_keyboard
+    await callback.message.edit_text(
+        f"آیا مطمئن هستید که می‌خواهید سرویس #{service_id} را فعال کنید؟",
+        reply_markup=confirm_action_keyboard("enable", telegram_id, service_id),
+    )
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("cust_svc_delete:"))
@@ -169,22 +187,124 @@ async def delete_customer_service(callback: CallbackQuery):
     if not service or service.owner_telegram_id != telegram_id:
         await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
         return
-    try:
-        await panel_client.delete_user(service.panel_username)
-    except PanelAPIError as exc:
-        logger.exception("Failed to delete panel user %s", service.panel_username)
-        await callback.answer(f"خطا در پنل: {exc}", show_alert=True)
+    from ...keyboards import confirm_action_keyboard
+    await callback.message.edit_text(
+        f"⚠️ آیا مطمئن هستید که می‌خواهید سرویس #{service_id} را از پنل حذف کنید؟\n\nاین عمل غیرقابل بازگشت است.",
+        reply_markup=confirm_action_keyboard("delete", telegram_id, service_id),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("cust_confirm:"))
+async def confirm_action(callback: CallbackQuery):
+    _, action, telegram_id, service_id = callback.data.split(":")
+    telegram_id, service_id = int(telegram_id), int(service_id)
+    service = await get_service(service_id)
+    if not service or service.owner_telegram_id != telegram_id:
+        await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
         return
-    await update_service(service_id, status="deleted")
-    await callback.answer(t.CUSTOMER_SERVICE_DELETED.format(id=service_id), show_alert=True)
-    services = await list_user_services(telegram_id)
-    if services:
+
+    if action == "disable":
+        try:
+            await panel_client.disable_user(service.panel_username)
+        except PanelAPIError as exc:
+            await callback.answer(f"خطا در پنل: {exc}", show_alert=True)
+            return
+        await update_service(service_id, status="disabled")
+        await callback.answer("سرویس غیرفعال شد.", show_alert=True)
+
+    elif action == "enable":
+        try:
+            await panel_client.enable_user(service.panel_username)
+        except PanelAPIError as exc:
+            await callback.answer(f"خطا در پنل: {exc}", show_alert=True)
+            return
+        await update_service(service_id, status="active")
+        await callback.answer("سرویس فعال شد.", show_alert=True)
+
+    elif action == "delete":
+        try:
+            await panel_client.delete_user(service.panel_username)
+        except PanelAPIError as exc:
+            await callback.answer(f"خطا در پنل: {exc}", show_alert=True)
+            return
+        await update_service(service_id, status="deleted")
+        await callback.answer("سرویس حذف شد.", show_alert=True)
+
+    # Refresh the view
+    refreshed = await get_service(service_id)
+    if refreshed.status == "deleted":
         await callback.message.edit_text(
-            t.CUSTOMER_SERVICES_HEADER.format(telegram_id=telegram_id),
-            reply_markup=customer_services_keyboard(telegram_id, services),
+            f"📦 سرویس #{service_id}\n\n⚠️ این سرویس از پنل حذف شده است.",
+            reply_markup=customer_service_actions_keyboard(telegram_id, service_id, "deleted"),
         )
     else:
-        await callback.message.edit_text(t.CUSTOMER_NO_SERVICES)
+        await view_customer_service(callback, None)
+
+
+@router.callback_query(F.data.startswith("cust_svc_regen:"))
+async def admin_regenerate_service(callback: CallbackQuery):
+    _, telegram_id, service_id = callback.data.split(":")
+    telegram_id, service_id = int(telegram_id), int(service_id)
+    service = await get_service(service_id)
+    if not service or service.owner_telegram_id != telegram_id:
+        await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
+        return
+    if service.status != "active":
+        await callback.answer("سرویس فعال نیست.", show_alert=True)
+        return
+    try:
+        panel_user = await panel_client.regenerate_subscription(service.panel_username)
+    except PanelAPIError:
+        await callback.answer(t.ERROR_GENERIC, show_alert=True)
+        return
+    await update_service(service.id, subscription_link=panel_user.subscription_link, panel_uuid=panel_user.uuid or service.panel_uuid)
+    if panel_user.subscription_link:
+        from ...qr_gen import generate_qr_image
+        text = f"لینک جدید:\n{panel_user.subscription_link}"
+        qr_photo = generate_qr_image(panel_user.subscription_link)
+        await callback.message.answer_photo(qr_photo, caption=text)
+    else:
+        await callback.message.answer("خطا در بازسازی لینک.")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("cust_svc_qr:"))
+async def admin_get_qr(callback: CallbackQuery):
+    _, telegram_id, service_id = callback.data.split(":")
+    telegram_id, service_id = int(telegram_id), int(service_id)
+    service = await get_service(service_id)
+    if not service or service.owner_telegram_id != telegram_id:
+        await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
+        return
+    if not service.subscription_link:
+        await callback.answer("لینک اشتراک وجود ندارد.", show_alert=True)
+        return
+    from ...qr_gen import generate_qr_image
+    qr_photo = generate_qr_image(service.subscription_link)
+    await callback.message.answer_photo(qr_photo, caption="📱 QR Code لینک اشتراک")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("cust_svc_extend:"))
+async def admin_extend_service(callback: CallbackQuery, state: FSMContext):
+    _, telegram_id, service_id = callback.data.split(":")
+    telegram_id, service_id = int(telegram_id), int(service_id)
+    service = await get_service(service_id)
+    if not service or service.owner_telegram_id != telegram_id:
+        await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
+        return
+    if service.status != "active":
+        await callback.answer("سرویس فعال نیست.", show_alert=True)
+        return
+    plans = await list_active_plans()
+    if not plans:
+        await callback.answer(t.NO_PLANS_AVAILABLE, show_alert=True)
+        return
+    await state.update_data(cust_id=telegram_id, extend_service_id=service_id)
+    await state.set_state(AdminCustomerLookup.add_service_plan)
+    await callback.message.edit_text(format_plans_list(plans), reply_markup=plans_list_keyboard(plans))
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("cust_svc_add:"))
@@ -209,7 +329,42 @@ async def add_service_confirm(callback: CallbackQuery, state: FSMContext):
         return
     data = await state.get_data()
     telegram_id = data["cust_id"]
+    extend_service_id = data.get("extend_service_id")
 
+    if extend_service_id:
+        # Admin extend flow
+        service = await get_service(extend_service_id)
+        if not service:
+            await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
+            await state.clear()
+            return
+
+        from datetime import timedelta as td
+        new_traffic = float(service.traffic_gb) + float(plan.traffic_gb)
+        now = datetime.now(timezone.utc)
+        if service.expires_at:
+            expires = service.expires_at if service.expires_at.tzinfo else service.expires_at.replace(tzinfo=timezone.utc)
+            if expires > now:
+                new_expires = expires + td(days=plan.months * 30)
+            else:
+                new_expires = now + td(days=plan.months * 30)
+        else:
+            new_expires = now + td(days=plan.months * 30)
+
+        await update_service(extend_service_id, traffic_gb=new_traffic, expires_at=new_expires, months=service.months + plan.months)
+        try:
+            data_limit_bytes = int(new_traffic * 1024**3)
+            expire_timestamp = int(new_expires.timestamp())
+            await panel_client.update_user_limits(service.panel_username, data_limit_bytes, expire_timestamp)
+        except PanelAPIError:
+            pass
+
+        await state.clear()
+        await callback.message.edit_text(f"سرویس #{extend_service_id} با موفقیت تمدید شد.\n\n+{plan.months} ماه / +{plan.traffic_gb} گیگ")
+        await callback.answer()
+        return
+
+    # Normal add service flow
     panel_username = f"tg{telegram_id}_{uuid.uuid4().hex[:6]}"
     data_limit_bytes = int(plan.traffic_gb * 1024**3)
     duration_seconds = plan.months * 30 * 86400
@@ -225,7 +380,7 @@ async def add_service_confirm(callback: CallbackQuery, state: FSMContext):
         await callback.answer(f"خطا در پنل: {exc}", show_alert=True)
         return
 
-    from datetime import datetime, timedelta, timezone
+    from datetime import timedelta
 
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)
     await create_service(

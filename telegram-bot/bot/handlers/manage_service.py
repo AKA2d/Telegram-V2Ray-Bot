@@ -6,6 +6,7 @@ from aiogram.fsm.state import default_state
 from aiogram.types import CallbackQuery, Message
 
 from .. import texts as t
+from ..config import is_admin
 from ..keyboards import (
     extend_confirm_keyboard,
     extend_final_keyboard,
@@ -21,6 +22,11 @@ from ..services_repo import find_service_by_link_or_uuid, get_service, list_user
 from ..states import BuyService, ExtendService
 
 router = Router(name="manage_service")
+
+
+def _can_manage(service, user_id: int) -> bool:
+    """Check if user can manage this service (owner or admin)."""
+    return service.owner_telegram_id == user_id or is_admin(user_id)
 
 
 def _format_remaining_days(expires_at) -> str:
@@ -90,10 +96,10 @@ async def manage_menu(message: Message):
 async def view_service(callback: CallbackQuery):
     service_id = int(callback.data.split(":")[1])
     service = await get_service(service_id)
-    if not service or service.owner_telegram_id != callback.from_user.id:
+    if not service or not _can_manage(service, callback.from_user.id):
         await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
         return
-    await callback.message.answer(await _format_service(service), reply_markup=service_actions_keyboard(service.id))
+    await callback.message.answer(await _format_service(service), reply_markup=service_actions_keyboard(service.id, service.status, is_admin(callback.from_user.id)))
     await callback.answer()
 
 
@@ -101,7 +107,7 @@ async def view_service(callback: CallbackQuery):
 async def regenerate_service(callback: CallbackQuery):
     service_id = int(callback.data.split(":")[1])
     service = await get_service(service_id)
-    if not service or service.owner_telegram_id != callback.from_user.id:
+    if not service or not _can_manage(service, callback.from_user.id):
         await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
         return
     if service.status != "active":
@@ -127,7 +133,7 @@ async def regenerate_service(callback: CallbackQuery):
 async def get_qr_code(callback: CallbackQuery):
     service_id = int(callback.data.split(":")[1])
     service = await get_service(service_id)
-    if not service or service.owner_telegram_id != callback.from_user.id:
+    if not service or not _can_manage(service, callback.from_user.id):
         await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
         return
     if not service.subscription_link:
@@ -142,6 +148,63 @@ async def get_qr_code(callback: CallbackQuery):
     await callback.answer()
 
 
+@router.callback_query(F.data.startswith("svc_disable:"))
+async def disable_service(callback: CallbackQuery):
+    service_id = int(callback.data.split(":")[1])
+    service = await get_service(service_id)
+    if not service or not _can_manage(service, callback.from_user.id):
+        await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
+        return
+    if service.status != "active":
+        await callback.answer("سرویس در حال حاضر فعال نیست.", show_alert=True)
+        return
+    try:
+        await panel_client.disable_user(service.panel_username)
+    except PanelAPIError:
+        await callback.answer(t.ERROR_GENERIC, show_alert=True)
+        return
+    await update_service(service_id, status="disabled")
+    await callback.message.edit_text("سرویس با موفقیت غیرفعال شد.")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("svc_enable:"))
+async def enable_service(callback: CallbackQuery):
+    service_id = int(callback.data.split(":")[1])
+    service = await get_service(service_id)
+    if not service or not _can_manage(service, callback.from_user.id):
+        await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
+        return
+    if service.status == "active":
+        await callback.answer("سرویس در حال حاضر فعال است.", show_alert=True)
+        return
+    try:
+        await panel_client.enable_user(service.panel_username)
+    except PanelAPIError:
+        await callback.answer(t.ERROR_GENERIC, show_alert=True)
+        return
+    await update_service(service_id, status="active")
+    await callback.message.edit_text("سرویس با موفقیت فعال شد.")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("svc_delete:"))
+async def delete_service(callback: CallbackQuery):
+    service_id = int(callback.data.split(":")[1])
+    service = await get_service(service_id)
+    if not service or not _can_manage(service, callback.from_user.id):
+        await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
+        return
+    try:
+        await panel_client.delete_user(service.panel_username)
+    except PanelAPIError:
+        await callback.answer(t.ERROR_GENERIC, show_alert=True)
+        return
+    await update_service(service_id, status="deleted")
+    await callback.message.edit_text("سرویس با موفقیت از پنل حذف شد.")
+    await callback.answer()
+
+
 @router.callback_query(F.data.startswith("svc_increase:"))
 async def increase_users(callback: CallbackQuery):
     await callback.answer(t.PHASE2_NOT_AVAILABLE, show_alert=True)
@@ -151,7 +214,7 @@ async def increase_users(callback: CallbackQuery):
 async def extend_start(callback: CallbackQuery, state: FSMContext):
     service_id = int(callback.data.split(":")[1])
     service = await get_service(service_id)
-    if not service or service.owner_telegram_id != callback.from_user.id:
+    if not service or not _can_manage(service, callback.from_user.id):
         await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
         return
     if service.status != "active":
@@ -254,7 +317,7 @@ async def extend_apply(callback: CallbackQuery, state: FSMContext):
     price = data["price"]
 
     service = await get_service(service_id)
-    if not service or service.owner_telegram_id != callback.from_user.id:
+    if not service or not _can_manage(service, callback.from_user.id):
         await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
         await state.clear()
         return
@@ -356,7 +419,11 @@ async def _apply_extend(service, add_months: int, add_traffic: int):
 
 @router.message(default_state, F.text.regexp(r"^[A-Za-z0-9\-_:/.]{6,}$"))
 async def lookup_by_text(message: Message):
+    from ..config import is_admin
     service = await find_service_by_link_or_uuid(message.text.strip())
-    if not service or service.owner_telegram_id != message.from_user.id:
+    if not service:
         return
-    await message.answer(await _format_service(service), reply_markup=service_actions_keyboard(service.id))
+    # Admin can manage any service, users can only manage their own
+    if not is_admin(message.from_user.id) and service.owner_telegram_id != message.from_user.id:
+        return
+    await message.answer(await _format_service(service), reply_markup=service_actions_keyboard(service.id, service.status, is_admin(message.from_user.id)))

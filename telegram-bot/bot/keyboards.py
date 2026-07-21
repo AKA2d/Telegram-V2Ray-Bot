@@ -58,14 +58,21 @@ def order_review_keyboard(order_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def service_actions_keyboard(service_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text=t.BTN_REGENERATE, callback_data=f"svc_regen:{service_id}")],
-            [InlineKeyboardButton(text="📱 دریافت QR Code", callback_data=f"svc_qr:{service_id}")],
-            [InlineKeyboardButton(text=t.BTN_EXTEND, callback_data=f"svc_extend:{service_id}")],
-        ]
-    )
+def service_actions_keyboard(service_id: int, status: str = "active", is_admin: bool = False) -> InlineKeyboardMarkup:
+    if status == "active":
+        toggle_btn = InlineKeyboardButton(text="🚫 غیرفعال کردن سرویس", callback_data=f"svc_disable:{service_id}")
+    else:
+        toggle_btn = InlineKeyboardButton(text="✅ فعال کردن سرویس", callback_data=f"svc_enable:{service_id}")
+
+    rows = [
+        [InlineKeyboardButton(text=t.BTN_REGENERATE, callback_data=f"svc_regen:{service_id}")],
+        [InlineKeyboardButton(text="📱 دریافت QR Code", callback_data=f"svc_qr:{service_id}")],
+        [InlineKeyboardButton(text=t.BTN_EXTEND, callback_data=f"svc_extend:{service_id}")],
+        [toggle_btn],
+    ]
+    if is_admin:
+        rows.append([InlineKeyboardButton(text="🗑 حذف سرویس از پنل", callback_data=f"svc_delete:{service_id}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def services_list_keyboard(services: list) -> InlineKeyboardMarkup:
@@ -197,9 +204,18 @@ def admin_wholesalers_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="➕ افزودن عمده‌فروش", callback_data="wholesaler_add")],
             [InlineKeyboardButton(text="➖ حذف عمده‌فروش", callback_data="wholesaler_remove")],
+            [InlineKeyboardButton(text="📊 آمار عمده‌فروشان", callback_data="wholesaler_stats")],
             [InlineKeyboardButton(text="↩ بازگشت", callback_data="wholesaler_back")],
         ]
     )
+
+
+def wholesaler_stats_keyboard(wholesalers: list) -> InlineKeyboardMarkup:
+    rows = []
+    for w in wholesalers:
+        rows.append([InlineKeyboardButton(text=f"👤 {w.telegram_id}", callback_data=f"wholesaler_detail:{w.telegram_id}")])
+    rows.append([InlineKeyboardButton(text="↩ بازگشت", callback_data="wholesaler_back")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def yes_no_inline(prefix: str, item_id: int | str) -> InlineKeyboardMarkup:
@@ -227,18 +243,45 @@ def customer_manage_keyboard(telegram_id: int) -> InlineKeyboardMarkup:
 def customer_services_keyboard(telegram_id: int, services: list) -> InlineKeyboardMarkup:
     rows = []
     for s in services:
-        status_icon = "✅" if s.status == "active" else "🚫"
-        rows.append([InlineKeyboardButton(text=f"{status_icon} سرویس #{s.id} — {s.panel_username}", callback_data=f"cust_svc_view:{telegram_id}:{s.id}")])
+        if s.status == "active":
+            icon = "✅"
+        elif s.status == "disabled":
+            icon = "🚫"
+        elif s.status == "deleted":
+            icon = "🗑"
+        else:
+            icon = "⏳"
+        rows.append([InlineKeyboardButton(text=f"{icon} #{s.id} — {s.panel_username}", callback_data=f"cust_svc_view:{telegram_id}:{s.id}")])
     rows.append([InlineKeyboardButton(text="↩ بازگشت", callback_data=f"cust_back_to:{telegram_id}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def customer_service_actions_keyboard(telegram_id: int, service_id: int) -> InlineKeyboardMarkup:
+def customer_service_actions_keyboard(telegram_id: int, service_id: int, status: str = "active") -> InlineKeyboardMarkup:
+    if status == "active":
+        toggle_btn = InlineKeyboardButton(text="🚫 غیرفعال کردن", callback_data=f"cust_svc_disable:{telegram_id}:{service_id}")
+    elif status == "disabled":
+        toggle_btn = InlineKeyboardButton(text="✅ فعال کردن", callback_data=f"cust_svc_enable:{telegram_id}:{service_id}")
+    else:
+        toggle_btn = None
+
+    rows = [
+        [InlineKeyboardButton(text="🔄 تغییر لینکساب", callback_data=f"cust_svc_regen:{telegram_id}:{service_id}")],
+        [InlineKeyboardButton(text="📱 دریافت QR Code", callback_data=f"cust_svc_qr:{telegram_id}:{service_id}")],
+        [InlineKeyboardButton(text="⏳ تمدید رایگان", callback_data=f"cust_svc_extend:{telegram_id}:{service_id}")],
+    ]
+    if toggle_btn:
+        rows.append([toggle_btn])
+    if status != "deleted":
+        rows.append([InlineKeyboardButton(text="🗑 حذف از پنل", callback_data=f"cust_svc_delete:{telegram_id}:{service_id}")])
+    rows.append([InlineKeyboardButton(text="↩ بازگشت", callback_data=f"cust_svc_list:{telegram_id}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def confirm_action_keyboard(action: str, telegram_id: int, service_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🚫 غیرفعال کردن", callback_data=f"cust_svc_disable:{telegram_id}:{service_id}")],
-            [InlineKeyboardButton(text="🗑 حذف از پنل", callback_data=f"cust_svc_delete:{telegram_id}:{service_id}")],
-            [InlineKeyboardButton(text="↩ بازگشت", callback_data=f"cust_svc_list:{telegram_id}")],
+            [InlineKeyboardButton(text="بله، مطمئنم", callback_data=f"cust_confirm:{action}:{telegram_id}:{service_id}")],
+            [InlineKeyboardButton(text="خیر، انصراف", callback_data=f"cust_svc_view:{telegram_id}:{service_id}")],
         ]
     )
 

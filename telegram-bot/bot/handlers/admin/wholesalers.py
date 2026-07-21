@@ -5,9 +5,15 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from ... import texts as t
-from ...keyboards import admin_menu_keyboard, admin_wholesalers_keyboard, cancel_keyboard
+from ...keyboards import admin_menu_keyboard, admin_wholesalers_keyboard, cancel_keyboard, wholesaler_stats_keyboard
 from ...states import AdminWholesalers
-from ...wholesalers_repo import create_wholesaler, list_wholesalers, remove_wholesaler
+from ...wholesalers_repo import (
+    create_wholesaler,
+    get_all_wholesalers_stats,
+    get_wholesaler_stats,
+    list_wholesalers,
+    remove_wholesaler,
+)
 from .base import AdminOnlyMiddleware
 
 router = Router(name="admin_wholesalers")
@@ -93,6 +99,44 @@ async def remove_wholesaler_by_id(message: Message, state: FSMContext):
 
     await state.clear()
     await message.answer(t.WHOLESALER_REMOVED, reply_markup=admin_menu_keyboard())
+
+
+@router.callback_query(F.data == "wholesaler_stats")
+async def show_wholesaler_stats(callback: CallbackQuery):
+    wholesalers = await list_wholesalers()
+    if not wholesalers:
+        await callback.answer(t.NO_WHOLESALERS_DEFINED, show_alert=True)
+        return
+
+    bulk = await get_all_wholesalers_stats()
+    text = (
+        f"📊 آمار کلی عمده‌فروشان\n\n"
+        f"👥 تعداد عمده‌فروشان: {bulk['count']}\n"
+        f"📦 کل سرویس‌ها: {bulk['total_services']}\n"
+        f"✅ سرویس‌های فعال: {bulk['active_services']}\n"
+        f"💰 کل فروش: {bulk['total_revenue']:,} تومان\n"
+        f"🌐 کل ترافیک: {bulk['total_traffic']} گیگ\n"
+        f"💳 کل موجودی کیف پول: {bulk['total_wallet']:,} تومان\n\n"
+        f"برای دیدن جزئیات هر عمده‌فروش، روی آیدی او کلیک کنید:"
+    )
+    await callback.message.edit_text(text, reply_markup=wholesaler_stats_keyboard(wholesalers))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("wholesaler_detail:"))
+async def show_wholesaler_detail(callback: CallbackQuery):
+    telegram_id = int(callback.data.split(":")[1])
+    stats = await get_wholesaler_stats(telegram_id)
+    text = (
+        f"📊 آمار عمده‌فروش {telegram_id}\n\n"
+        f"📦 کل سرویس‌ها: {stats['total_services']}\n"
+        f"✅ سرویس‌های فعال: {stats['active_services']}\n"
+        f"💰 کل فروش: {stats['total_revenue']:,} تومان\n"
+        f"🌐 کل ترافیک: {stats['total_traffic']} گیگ\n"
+        f"💳 موجودی کیف پول: {stats['wallet_balance']:,} تومان"
+    )
+    await callback.message.edit_text(text)
+    await callback.answer()
 
 
 @router.message(F.text)

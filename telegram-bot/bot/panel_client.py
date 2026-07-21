@@ -160,6 +160,9 @@ class PasarGuardClient:
     async def disable_user(self, username_or_uuid: str) -> None:
         await self._modify_status(username_or_uuid, {"status": "disabled"})
 
+    async def enable_user(self, username_or_uuid: str) -> None:
+        await self._modify_status(username_or_uuid, {"status": "active"})
+
     async def _modify_status(self, username_or_uuid: str, payload: dict) -> None:
         resp = await self._request("PUT", f"/api/user/{username_or_uuid}", json=payload)
         if resp.status_code != 200:
