@@ -1,5 +1,6 @@
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State
 from aiogram.types import Message
 
 from .. import texts as t
@@ -11,6 +12,8 @@ from ..settings_repo import get_setting, set_setting
 from ..stats_repo import get_period_stats
 
 router = Router(name="admin_entry")
+
+SET_WHOLESALER_FEE = State()
 
 
 @router.message(F.text == t.ADMIN_MENU)
@@ -108,12 +111,12 @@ async def open_test_menu(message: Message):
 async def prompt_set_wholesaler_fee(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
-    await state.set_state("set_wholesaler_fee")
+    await state.set_state(SET_WHOLESALER_FEE)
     current = await get_setting("wholesaler_fee")
     await message.answer(f"هزینه فعلی عمده‌فروشی: {int(current):,} تومان\n\nمبلغ جدید را وارد کنید:", reply_markup=cancel_keyboard())
 
 
-@router.message(F.text == "💰 تنظیم هزینه عمده‌فروش")
+@router.message(SET_WHOLESALER_FEE)
 async def set_wholesaler_fee(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
