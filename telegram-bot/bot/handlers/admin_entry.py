@@ -1,6 +1,5 @@
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State
 from aiogram.types import Message
 
 from .. import texts as t
@@ -12,8 +11,6 @@ from ..settings_repo import get_setting, set_setting
 from ..stats_repo import get_period_stats
 
 router = Router(name="admin_entry")
-
-SET_WHOLESALER_FEE = State()
 
 
 @router.message(F.text == t.ADMIN_MENU)
@@ -107,26 +104,28 @@ async def open_test_menu(message: Message):
 
 # ---- Wholesaler fee management ----
 
+_pending_fee_admins: set[int] = set()
+
+
 @router.message(F.text == "💰 تنظیم هزینه عمده‌فروش")
-async def prompt_set_wholesaler_fee(message: Message, state: FSMContext):
+async def prompt_set_wholesaler_fee(message: Message):
     if not is_admin(message.from_user.id):
         return
-    await state.set_state(SET_WHOLESALER_FEE)
+    _pending_fee_admins.add(message.from_user.id)
     current = await get_setting("wholesaler_fee")
     await message.answer(f"هزینه فعلی عمده‌فروشی: {int(current):,} تومان\n\nمبلغ جدید را وارد کنید:", reply_markup=cancel_keyboard())
 
 
-@router.message(SET_WHOLESALER_FEE)
-async def set_wholesaler_fee(message: Message, state: FSMContext):
+@router.message(F.text.regexp(r"^\d+$"))
+async def try_set_wholesaler_fee(message: Message):
+    if message.from_user.id not in _pending_fee_admins:
+        return
     if not is_admin(message.from_user.id):
         return
-    try:
-        value = int(message.text.strip())
-        if value <= 0:
-            raise ValueError
-    except ValueError:
-        await message.answer(t.INVALID_NUMBER)
+    _pending_fee_admins.discard(message.from_user.id)
+    value = int(message.text.strip())
+    if value <= 0:
+        await message.answer(t.INVALID_NUMBER, reply_markup=admin_menu_keyboard())
         return
     await set_setting("wholesaler_fee", str(value))
-    await state.clear()
     await message.answer(f"هزینه عمده‌فروشی به {value:,} تومان تغییر کرد.", reply_markup=admin_menu_keyboard())
