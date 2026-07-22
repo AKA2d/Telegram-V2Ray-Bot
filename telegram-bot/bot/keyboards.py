@@ -294,6 +294,7 @@ def connect_platform_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=t.CONNECT_PLATFORM_IOS), KeyboardButton(text=t.CONNECT_PLATFORM_ANDROID)],
+            [KeyboardButton(text=t.CONNECT_PLATFORM_WINDOWS)],
             [KeyboardButton(text=t.BTN_BACK)],
         ],
         resize_keyboard=True,
@@ -302,7 +303,8 @@ def connect_platform_keyboard() -> ReplyKeyboardMarkup:
 
 CONNECT_APPS = {
     "ios": [("v2box", True), ("NapsternetV", False)],
-    "android": [("v2rayNG", True), ("v2box", True), ("NapsternetV", False) ],
+    "android": [("v2rayNG", True), ("v2box", True), ("NapsternetV", False)],
+    "windows": [("v2rayN", True), ("Hiddify", False)],
 }
 
 

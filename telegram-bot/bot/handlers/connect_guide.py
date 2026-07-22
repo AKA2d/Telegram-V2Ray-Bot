@@ -9,11 +9,30 @@ from ..states import ConnectGuide
 router = Router(name="connect_guide")
 
 GUIDE_TEXT = {
-    ("ios", "NapsternetV"): "راهنمای اتصال با NapsternetV: \n https://t.me/GodVPN_Guide/124",
-    ("ios", "v2box"): "راهنمای اتصال با v2box: \n https://t.me/GodVPN_Guide/125",
-    ("android", "v2rayNG"): "راهنمای اتصال با v2rayNG: \n https://t.me/GodVPN_Guide/122",
-    ("android", "NapsternetV"): "راهنمای اتصال با NapsternetV: \n https://t.me/GodVPN_Guide/124",
-    ("android", "v2box"): "راهنمای اتصال با v2box: \n https://t.me/GodVPN_Guide/125"
+    ("ios", "v2box"): "راهنمای اتصال با v2box:\nhttps://t.me/GodVPN_Guide/125",
+    ("ios", "NapsternetV"): "راهنمای اتصال با NapsternetV:\nhttps://t.me/GodVPN_Guide/124",
+    ("android", "v2rayNG"): "راهنمای اتصال با v2rayNG:\nhttps://t.me/GodVPN_Guide/122",
+    ("android", "NapsternetV"): "راهنمای اتصال با NapsternetV:\nhttps://t.me/GodVPN_Guide/124",
+    ("android", "v2box"): "راهنمای اتصال با v2box:\nhttps://t.me/GodVPN_Guide/125",
+    ("windows", "v2rayN"): (
+        "راهنمای اتصال با v2rayN:\n\n"
+        "1. دانلود v2rayN از:\n"
+        "https://github.com/2dust/v2rayN/releases/latest\n\n"
+        "2. فایل zip را اکسترact کنید و v2rayN.exe را اجرا کنید\n\n"
+        "3. روی آیکون v2rayN در system tray کلیک راست کنید\n\n"
+        "4. گزینه اضافه کردن لینک سابسکریپشن را بزنید\n\n"
+        "5. لینک اشتراک خود را پیست کنید\n\n"
+        "6. سرور را انتخاب کنید و اتصال را بزنید"
+    ),
+    ("windows", "Hiddify"): (
+        "راهنمای اتصال با Hiddify:\n\n"
+        "1. دانلود Hiddify از:\n"
+        "https://github.com/hiddify/hiddify-app/releases/latest\n\n"
+        "2. نصب و اجرای برنامه\n\n"
+        "3. لینک اشتراک را کپی کنید\n\n"
+        "4. در برنامه لینک را پیست و اضافه کنید\n\n"
+        "5. اتصال را بزنید"
+    ),
 }
 
 
@@ -35,6 +54,13 @@ async def choose_android(message: Message, state: FSMContext):
     await state.update_data(platform="android")
     await state.set_state(ConnectGuide.app)
     await message.answer(t.CONNECT_CHOOSE_APP, reply_markup=connect_apps_keyboard("android"))
+
+
+@router.message(ConnectGuide.platform, F.text == t.CONNECT_PLATFORM_WINDOWS)
+async def choose_windows(message: Message, state: FSMContext):
+    await state.update_data(platform="windows")
+    await state.set_state(ConnectGuide.app)
+    await message.answer(t.CONNECT_CHOOSE_APP, reply_markup=connect_apps_keyboard("windows"))
 
 
 @router.message(ConnectGuide.app)
