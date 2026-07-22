@@ -108,10 +108,41 @@ def admin_guide_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def guide_management_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📖 ویرایش راهنماها", callback_data="guide_list")],
+            [InlineKeyboardButton(text="➕ افزودن اپلیکیشن", callback_data="guide_add_app")],
+            [InlineKeyboardButton(text="➖ حذف اپلیکیشن", callback_data="guide_remove_app")],
+            [InlineKeyboardButton(text=t.BTN_BACK, callback_data="cust_back")],
+        ]
+    )
+
+
 def guide_list_keyboard(guides: list) -> InlineKeyboardMarkup:
     rows = []
     for key, label in guides:
         rows.append([InlineKeyboardButton(text=label, callback_data=f"guide_edit:{key}")])
+    rows.append([InlineKeyboardButton(text=t.BTN_BACK, callback_data="cust_back")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def platform_choice_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📱 iOS", callback_data="guide_add_app_platform:ios")],
+            [InlineKeyboardButton(text="🤖 Android", callback_data="guide_add_app_platform:android")],
+            [InlineKeyboardButton(text="💻 Windows", callback_data="guide_add_app_platform:windows")],
+            [InlineKeyboardButton(text=t.BTN_BACK, callback_data="cust_back")],
+        ]
+    )
+
+
+def remove_app_keyboard(apps: dict) -> InlineKeyboardMarkup:
+    rows = []
+    for platform, app_list in apps.items():
+        for app in app_list:
+            rows.append([InlineKeyboardButton(text=f"{platform.title()} - {app['label']}", callback_data=f"guide_remove_app_confirm:{platform}:{app['key']}")])
     rows.append([InlineKeyboardButton(text=t.BTN_BACK, callback_data="cust_back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

@@ -4,7 +4,7 @@ from aiogram.types import Message
 
 from .. import texts as t
 from ..config import is_admin
-from ..keyboards import admin_menu_keyboard, cancel_keyboard, main_menu
+from ..keyboards import admin_menu_keyboard, cancel_keyboard, guide_management_keyboard, main_menu
 from ..panel_client import PanelAPIError, panel_client
 from ..services_repo import count_all_services
 from ..settings_repo import get_setting, set_setting
@@ -100,6 +100,13 @@ async def show_stats(message: Message):
 async def open_test_menu(message: Message):
     from .admin.test_mgmt import _show_test_settings
     await _show_test_settings(message)
+
+
+@router.message(F.text == "📖 مدیریت راهنماها")
+async def open_guide_menu(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    await message.answer("مدیریت راهنماها:", reply_markup=guide_management_keyboard())
 
 
 # ---- Wholesaler fee management ----
