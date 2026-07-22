@@ -99,6 +99,23 @@ def admin_test_keyboard(test_enabled: bool) -> InlineKeyboardMarkup:
     )
 
 
+def admin_guide_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📖 ویرایش راهنماها", callback_data="guide_list")],
+            [InlineKeyboardButton(text=t.BTN_BACK, callback_data="cust_back")],
+        ]
+    )
+
+
+def guide_list_keyboard(guides: list) -> InlineKeyboardMarkup:
+    rows = []
+    for key, label in guides:
+        rows.append([InlineKeyboardButton(text=label, callback_data=f"guide_edit:{key}")])
+    rows.append([InlineKeyboardButton(text=t.BTN_BACK, callback_data="cust_back")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def admin_menu_keyboard(sales_closed: bool | None = None) -> ReplyKeyboardMarkup:
     if sales_closed is None:
         import asyncio
@@ -117,6 +134,7 @@ def admin_menu_keyboard(sales_closed: bool | None = None) -> ReplyKeyboardMarkup
         [KeyboardButton(text=t.ADMIN_MENU_CARDS), KeyboardButton(text=t.ADMIN_MENU_TUNNEL)],
         [KeyboardButton(text=t.ADMIN_MENU_WHOLESALERS), KeyboardButton(text=t.ADMIN_MENU_STATS)],
         [KeyboardButton(text=t.ADMIN_MENU_TEST), KeyboardButton(text="💰 تنظیم هزینه عمده‌فروش")],
+        [KeyboardButton(text="📖 مدیریت راهنماها")],
         [KeyboardButton(text=status_text)],
         [KeyboardButton(text=t.BTN_BACK)],
     ]
