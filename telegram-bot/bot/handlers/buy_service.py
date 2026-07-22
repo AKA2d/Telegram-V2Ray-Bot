@@ -234,6 +234,7 @@ async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan, eff
         await callback.message.answer_photo(qr_photo, caption=text)
     else:
         await callback.message.answer(text, reply_markup=main_menu(is_admin(telegram_id)))
+    await callback.message.answer(t.POST_PURCHASE_HINT)
     await state.clear()
     await callback.answer()
 

@@ -189,3 +189,4 @@ async def get_test_service(message: Message):
         await message.answer_photo(qr_photo, caption=text, reply_markup=main_menu(is_user_admin))
     else:
         await message.answer(text, reply_markup=main_menu(is_user_admin))
+    await message.answer(t.POST_PURCHASE_HINT)

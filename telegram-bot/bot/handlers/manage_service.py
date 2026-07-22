@@ -350,6 +350,7 @@ async def extend_apply(callback: CallbackQuery, state: FSMContext):
         await _apply_extend(service, add_months, add_traffic)
         await state.clear()
         await callback.message.edit_text(t.EXTEND_SUCCESS)
+        await callback.message.answer(t.POST_PURCHASE_HINT)
         await callback.answer()
     else:
         # Not enough balance: show card for payment

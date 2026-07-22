@@ -92,6 +92,7 @@ async def approve_order(callback: CallbackQuery):
             await callback.bot.send_message(
                 order.telegram_id, t.SERVICE_ACTIVATED_CUSTOMER.format(link="—")
             )
+        await callback.bot.send_message(order.telegram_id, t.POST_PURCHASE_HINT)
     elif order.type == "wallet_topup":
         from ...db import async_session
         from ...models import User, WalletAuditLog
