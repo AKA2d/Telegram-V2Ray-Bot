@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from .db import async_session
 from .models import Order
@@ -28,6 +28,18 @@ async def update_order(order_id: int, **kwargs) -> Order | None:
         await session.commit()
         await session.refresh(order)
         return order
+
+
+async def transition_order_status(order_id: int, expected_status: str, new_status: str) -> bool:
+    """Atomically claim an order transition so duplicate callbacks are safe."""
+    async with async_session() as session:
+        result = await session.execute(
+            update(Order)
+            .where(Order.id == order_id, Order.status == expected_status)
+            .values(status=new_status)
+        )
+        await session.commit()
+        return result.rowcount == 1
 
 
 async def list_pending_orders() -> list[Order]:

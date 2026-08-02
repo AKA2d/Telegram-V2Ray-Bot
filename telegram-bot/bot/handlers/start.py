@@ -27,10 +27,10 @@ async def _user_menu(user_id: int):
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
     await get_or_create_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
-    await message.answer(t.WELCOME, reply_markup=await _user_menu(message.from_user.id))
     if REQUIRED_CHANNEL_ID and not await is_channel_member(message.bot, message.from_user.id):
         await message.answer(t.JOIN_CHANNEL_PROMPT, reply_markup=join_channel_keyboard(REQUIRED_CHANNEL_ID))
         return
+    await message.answer(t.WELCOME, reply_markup=await _user_menu(message.from_user.id))
 
 
 @router.callback_query(F.data == "check_membership")
@@ -39,7 +39,6 @@ async def check_membership(callback: CallbackQuery):
         await callback.message.answer(t.WELCOME, reply_markup=await _user_menu(callback.from_user.id))
         await callback.answer()
     else:
-        await callback.message.answer(t.WELCOME, reply_markup=await _user_menu(callback.from_user.id))
         await callback.answer(t.NOT_MEMBER_YET, show_alert=True)
 
 
@@ -98,9 +97,9 @@ async def request_wholesaler(message: Message):
 @router.message(F.text == t.BTN_CONFIRM)
 async def confirm_wholesaler_request(message: Message):
     from ..db import async_session
-    from ..models import User, WalletAuditLog
+    from ..models import User
     from ..settings_repo import get_setting
-    from ..wholesalers_repo import create_wholesaler, is_wholesaler
+    from ..wholesalers_repo import is_wholesaler, purchase_wholesaler_membership
 
     # Check if already a wholesaler
     if await is_wholesaler(message.from_user.id):
@@ -113,22 +112,14 @@ async def confirm_wholesaler_request(message: Message):
         balance = int(user.wallet_balance) if user else 0
 
     if balance >= fee:
-        # Deduct fee and become wholesaler
-        async with async_session() as session:
-            user = await session.get(User, message.from_user.id)
-            old_balance = user.wallet_balance
-            user.wallet_balance = old_balance - fee
-            session.add(
-                WalletAuditLog(
-                    telegram_id=message.from_user.id,
-                    old_balance=old_balance,
-                    new_balance=user.wallet_balance,
-                    reason="wholesaler fee",
-                )
-            )
-            await session.commit()
+        result = await purchase_wholesaler_membership(message.from_user.id, fee)
+        if result == "already":
+            await message.answer("شما از قبل عمده‌فروش هستید.", reply_markup=await _user_menu(message.from_user.id))
+            return
+        if result == "insufficient":
+            await message.answer(t.WHOLESALER_REQUEST_INSUFFICIENT.format(balance=balance, fee=fee, deficit=fee - balance))
+            return
 
-        await create_wholesaler(message.from_user.id)
         await message.answer(t.WHOLESALER_REQUEST_ACCEPTED, reply_markup=await _user_menu(message.from_user.id))
     else:
         deficit = fee - balance

@@ -311,6 +311,10 @@ async def extend_plan_cancel(callback: CallbackQuery, state: FSMContext):
 async def extend_apply(callback: CallbackQuery, state: FSMContext):
     import json
     data = await state.get_data()
+    if data.get("extend_started"):
+        await callback.answer("پرداخت در حال انجام است.", show_alert=True)
+        return
+    await state.update_data(extend_started=True)
     service_id = data["service_id"]
     add_months = data["months"]
     add_traffic = data["traffic_gb"]
@@ -322,30 +326,10 @@ async def extend_apply(callback: CallbackQuery, state: FSMContext):
         await state.clear()
         return
 
-    # Check wallet balance
-    from ..db import async_session
-    from ..models import User, WalletAuditLog
+    from ..users_repo import debit_wallet
 
-    async with async_session() as session:
-        user = await session.get(User, callback.from_user.id)
-        balance = user.wallet_balance if user else 0
-
-    if balance >= price:
+    if await debit_wallet(callback.from_user.id, price, f"extend service #{service_id}") is not None:
         # Pay with wallet
-        async with async_session() as session:
-            user = await session.get(User, callback.from_user.id)
-            old_balance = user.wallet_balance
-            user.wallet_balance = old_balance - price
-            session.add(
-                WalletAuditLog(
-                    telegram_id=callback.from_user.id,
-                    old_balance=old_balance,
-                    new_balance=user.wallet_balance,
-                    reason=f"extend service #{service_id}",
-                )
-            )
-            await session.commit()
-
         # Apply extend
         await _apply_extend(service, add_months, add_traffic)
         await state.clear()

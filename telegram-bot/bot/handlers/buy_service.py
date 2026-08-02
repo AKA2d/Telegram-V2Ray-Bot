@@ -19,13 +19,14 @@ from ..keyboards import (
     plan_confirm_keyboard,
     plans_list_keyboard,
 )
-from ..models import User, WalletAuditLog
+from ..models import User
 from ..orders_repo import create_order, update_order
 from ..panel_client import PanelAPIError, panel_client
 from ..plans_repo import get_plan, list_active_plans
 from ..services_repo import create_service, update_service
 from ..states import BuyService
 from ..wholesalers_repo import is_wholesaler
+from ..users_repo import credit_wallet, debit_wallet
 
 router = Router(name="buy_service")
 logger = logging.getLogger("buy_service")
@@ -112,6 +113,10 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
         return
 
     data = await state.get_data()
+    if data.get("order_started"):
+        await callback.answer("پرداخت در حال انجام است.", show_alert=True)
+        return
+    await state.update_data(order_started=True)
     effective_price = data.get("effective_price", int(plan.price))
     telegram_id = callback.from_user.id
 
@@ -172,13 +177,21 @@ async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan, eff
     data_limit_bytes = int(plan.traffic_gb * 1024**3)
     duration_seconds = plan.months * 30 * 86400
 
+    # Debit before provisioning. The row lock in debit_wallet prevents two
+    # simultaneous callbacks from spending the same balance twice.
+    if await debit_wallet(telegram_id, effective_price, f"purchase plan '{plan.name}'") is None:
+        await callback.answer("موجودی کیف پول کافی نیست.", show_alert=True)
+        await state.clear()
+        return
+
     try:
         panel_user = await panel_client.create_active_user(
             username=panel_username,
             data_limit_bytes=data_limit_bytes,
             duration_seconds=duration_seconds,
         )
-    except PanelAPIError as exc:
+    except Exception as exc:
+        await credit_wallet(telegram_id, effective_price, f"refund: panel error for plan '{plan.name}'")
         logger.exception("Panel error while creating user (wallet payment)")
         for admin_id in ADMIN_IDS:
             await callback.bot.send_message(admin_id, t.PANEL_ERROR_ADMIN.format(error=str(exc)))
@@ -186,20 +199,6 @@ async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan, eff
         await state.clear()
         await callback.answer()
         return
-
-    async with async_session() as session:
-        user = await session.get(User, telegram_id)
-        old_balance = user.wallet_balance
-        user.wallet_balance = old_balance - effective_price
-        session.add(
-            WalletAuditLog(
-                telegram_id=telegram_id,
-                old_balance=old_balance,
-                new_balance=user.wallet_balance,
-                reason=f"purchase plan '{plan.name}'",
-            )
-        )
-        await session.commit()
 
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)
 

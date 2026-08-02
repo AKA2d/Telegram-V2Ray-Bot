@@ -26,6 +26,7 @@ from bot.handlers import (
     wallet,
 )
 from bot.handlers.admin import router as admin_router
+from bot.membership_middleware import RequiredChannelMiddleware
 from bot.scheduler import start_scheduler
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -104,6 +105,11 @@ async def main() -> None:
     session = AiohttpSession()
     bot = Bot(token=TELEGRAM_BOT_TOKEN, session=session)
     dp = Dispatcher(storage=MemoryStorage())
+
+    # Apply this before all routers so channel membership is a real access
+    # control, rather than merely a prompt shown by /start.
+    dp.message.outer_middleware(RequiredChannelMiddleware())
+    dp.callback_query.outer_middleware(RequiredChannelMiddleware())
 
     _setup_handlers(dp)
     start_scheduler(bot)

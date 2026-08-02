@@ -3,7 +3,7 @@ from decimal import Decimal
 from sqlalchemy import delete, select, func
 
 from .db import async_session
-from .models import Order, Service, User, Wholesaler
+from .models import Order, Service, User, WalletAuditLog, Wholesaler
 
 
 async def list_wholesalers() -> list[Wholesaler]:
@@ -41,6 +41,30 @@ async def create_wholesaler(telegram_id: int, username: str | None = None, first
         await session.commit()
         await session.refresh(wholesaler)
         return wholesaler
+
+
+async def purchase_wholesaler_membership(telegram_id: int, fee: int) -> str:
+    """Create a wholesaler membership and charge its fee in one transaction."""
+    async with async_session() as session:
+        async with session.begin():
+            user = await session.get(User, telegram_id, with_for_update=True)
+            if user is None or user.wallet_balance < Decimal(fee):
+                return "insufficient"
+            if await session.get(Wholesaler, telegram_id):
+                return "already"
+
+            old_balance = user.wallet_balance
+            user.wallet_balance = old_balance - Decimal(fee)
+            session.add(
+                WalletAuditLog(
+                    telegram_id=telegram_id,
+                    old_balance=old_balance,
+                    new_balance=user.wallet_balance,
+                    reason="wholesaler fee",
+                )
+            )
+            session.add(Wholesaler(telegram_id=telegram_id))
+            return "created"
 
 
 async def remove_wholesaler(telegram_id: int) -> None:

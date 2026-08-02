@@ -1,5 +1,8 @@
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
+import json
+
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message
 
 from .. import texts as t
@@ -10,11 +13,31 @@ from ..states import ConnectGuide
 router = Router(name="connect_guide")
 
 
-async def _get_guide(platform: str, app_key: str) -> str:
-    """Load guide from admin_settings or return default."""
+async def _get_guide(platform: str, app_key: str) -> str | dict:
+    """Load a text guide or a Telegram message reference."""
     key = f"guide_{platform}_{app_key}"
     guide = await get_setting(key)
     if guide and guide.strip():
+        try:
+            payload = json.loads(guide)
+            if (
+                isinstance(payload, dict)
+                and payload.get("type") == "telegram_message"
+                and isinstance(payload.get("chat_id"), int)
+                and isinstance(payload.get("message_id"), int)
+            ):
+                return payload
+            if (
+                isinstance(payload, dict)
+                and payload.get("type") == "telegram_messages"
+                and isinstance(payload.get("chat_id"), int)
+                and isinstance(payload.get("message_ids"), list)
+                and payload["message_ids"]
+                and all(isinstance(message_id, int) for message_id in payload["message_ids"])
+            ):
+                return payload
+        except (json.JSONDecodeError, TypeError):
+            pass
         return guide
     return "راهنما به‌زودی اضافه می‌شود."
 
@@ -81,4 +104,21 @@ async def choose_app(message: Message, state: FSMContext):
 
     app_key = app_keys[app_name]
     guide = await _get_guide(platform, app_key)
+    if isinstance(guide, dict):
+        try:
+            if guide["type"] == "telegram_messages":
+                await message.bot.copy_messages(
+                    chat_id=message.chat.id,
+                    from_chat_id=guide["chat_id"],
+                    message_ids=guide["message_ids"],
+                )
+            else:
+                await message.bot.copy_message(
+                    chat_id=message.chat.id,
+                    from_chat_id=guide["chat_id"],
+                    message_id=guide["message_id"],
+                )
+        except TelegramBadRequest:
+            await message.answer("راهنما در دسترس نیست. لطفاً به پشتیبانی اطلاع دهید.")
+        return
     await message.answer(guide)

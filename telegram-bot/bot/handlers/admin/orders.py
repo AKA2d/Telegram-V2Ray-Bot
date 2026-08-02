@@ -4,7 +4,7 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
 from ... import texts as t
-from ...orders_repo import get_order, list_pending_orders, update_order
+from ...orders_repo import get_order, list_pending_orders, transition_order_status, update_order
 from ...panel_client import PanelAPIError, panel_client
 from ...services_repo import get_service, update_service
 from ...settings_repo import get_setting, set_setting
@@ -52,29 +52,43 @@ async def approve_order(callback: CallbackQuery):
         await callback.answer(t.ORDER_ALREADY_PROCESSED, show_alert=True)
         return
 
-    await update_order(order_id, status="approved", reviewed_at=datetime.now(timezone.utc))
-
-    # Increment sold amount for stats tracking
-    current_sold = int(await get_setting("sold_amount"))
-    await set_setting("sold_amount", str(current_sold + int(order.amount)))
-
     if order.type == "new_service" and order.service_id:
+        # Claim the order before the slow external call. A second callback can
+        # no longer create another panel account while this one is in flight.
+        if not await transition_order_status(order_id, "awaiting_admin_review", "provisioning"):
+            await callback.answer(t.ORDER_ALREADY_PROCESSED, show_alert=True)
+            return
+
         service = await get_service(order.service_id)
-        # Increment sold traffic for stats tracking
-        current_traffic = int(float(await get_setting("sold_traffic")))
-        await set_setting("sold_traffic", str(current_traffic + float(service.traffic_gb)))
+        if not service:
+            await transition_order_status(order_id, "provisioning", "awaiting_admin_review")
+            await callback.message.answer(t.PANEL_ERROR_ADMIN.format(error="Service record was not found."))
+            await callback.answer()
+            return
+
         try:
             duration_seconds = service.months * 30 * 86400
             data_limit_bytes = int(service.traffic_gb * 1024**3)
-            panel_user = await panel_client.create_active_user(
-                username=service.panel_username,
-                data_limit_bytes=data_limit_bytes,
-                duration_seconds=duration_seconds,
-            )
-        except PanelAPIError as exc:
+            # A prior request can succeed at the panel while its response is
+            # lost. On retry, reuse that account rather than creating another.
+            try:
+                panel_user = await panel_client.get_user(service.panel_username)
+            except PanelAPIError as lookup_error:
+                if lookup_error.status_code != 404:
+                    raise
+                panel_user = await panel_client.create_active_user(
+                    username=service.panel_username,
+                    data_limit_bytes=data_limit_bytes,
+                    duration_seconds=duration_seconds,
+                )
+        except Exception as exc:
+            # Leave the receipt reviewable and the existing buttons usable.
+            # The admin can correct the panel issue and approve again.
+            await transition_order_status(order_id, "provisioning", "awaiting_admin_review")
             await callback.message.answer(t.PANEL_ERROR_ADMIN.format(error=str(exc)))
             await callback.answer()
             return
+
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=service.months * 30 * 86400)
         await update_service(
             service.id,
@@ -82,6 +96,11 @@ async def approve_order(callback: CallbackQuery):
             subscription_link=panel_user.subscription_link,
             expires_at=expires_at,
         )
+        await update_order(order_id, status="approved", reviewed_at=datetime.now(timezone.utc))
+        current_sold = int(await get_setting("sold_amount"))
+        await set_setting("sold_amount", str(current_sold + int(order.amount)))
+        current_traffic = int(float(await get_setting("sold_traffic")))
+        await set_setting("sold_traffic", str(current_traffic + float(service.traffic_gb)))
         await callback.bot.send_message(order.telegram_id, t.ORDER_APPROVED_CUSTOMER)
         if panel_user.subscription_link:
             from ...qr_gen import generate_qr_image
@@ -93,7 +112,17 @@ async def approve_order(callback: CallbackQuery):
                 order.telegram_id, t.SERVICE_ACTIVATED_CUSTOMER.format(link="—")
             )
         await callback.bot.send_message(order.telegram_id, t.POST_PURCHASE_HINT)
-    elif order.type == "wallet_topup":
+    else:
+        # Non-provisioning orders have no external account creation step, but
+        # still use an atomic status claim to reject duplicate button taps.
+        if not await transition_order_status(order_id, "awaiting_admin_review", "approved"):
+            await callback.answer(t.ORDER_ALREADY_PROCESSED, show_alert=True)
+            return
+        await update_order(order_id, reviewed_at=datetime.now(timezone.utc))
+        current_sold = int(await get_setting("sold_amount"))
+        await set_setting("sold_amount", str(current_sold + int(order.amount)))
+
+    if order.type == "wallet_topup":
         from ...db import async_session
         from ...models import User, WalletAuditLog
 

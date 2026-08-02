@@ -1,6 +1,8 @@
 """Admin guide management."""
 
+import asyncio
 import json
+import logging
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -16,10 +18,16 @@ from .base import AdminOnlyMiddleware
 router = Router(name="admin_guides")
 router.message.middleware(AdminOnlyMiddleware())
 router.callback_query.middleware(AdminOnlyMiddleware())
+logger = logging.getLogger(__name__)
+
+# Telegram delivers a media album as several messages with the same
+# media_group_id. The buffer contains only message IDs, never media bytes.
+_pending_album_tasks: dict[tuple[int, int], asyncio.Task] = {}
+_pending_albums: dict[tuple[int, int], dict] = {}
 
 
 class EditGuide(StatesGroup):
-    edit_text = State()
+    message = State()
 
 
 class AddApp(StatesGroup):
@@ -75,24 +83,89 @@ async def show_guide_list(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("guide_edit:"))
 async def prompt_edit_guide(callback: CallbackQuery, state: FSMContext):
     guide_key = callback.data.split(":", 1)[1]
-    current = await get_setting(guide_key)
     await state.update_data(guide_key=guide_key)
-    await state.set_state(EditGuide.edit_text)
+    await state.set_state(EditGuide.message)
     guide_name = guide_key.replace("guide_", "").replace("_", " ").title()
-    text = f"ویرایش راهنما: {guide_name}\n\nمتن فعلی:\n{current or '(خالی)'}\n\nمتن جدید را ارسال کنید:"
+    text = (
+        f"ویرایش راهنما: {guide_name}\n\n"
+        "پیام راهنما را برای ربات فوروارد کنید. پیام می‌تواند متن، عکس، ویدیو یا رسانهٔ دیگری باشد. "
+        "فایل دانلود یا روی سرور ذخیره نمی‌شود؛ ربات همان پیام را برای کاربران کپی می‌کند."
+    )
     await callback.message.edit_text(text)
     await callback.answer()
 
 
-@router.message(EditGuide.edit_text)
+async def _store_message_guide(guide_key: str, chat_id: int, message_ids: list[int]) -> None:
+    """Save Telegram references for one message or a complete media album."""
+    payload_type = "telegram_messages" if len(message_ids) > 1 else "telegram_message"
+    payload = {"type": payload_type, "chat_id": chat_id}
+    if len(message_ids) > 1:
+        payload["message_ids"] = message_ids
+    else:
+        payload["message_id"] = message_ids[0]
+    await set_setting(
+        guide_key,
+        json.dumps(payload),
+    )
+
+
+async def _finish_album_after_quiet_period(state: FSMContext, bot, task_key: tuple[int, int], album: dict) -> None:
+    """Wait for the final album item, then persist all Telegram references."""
+    try:
+        await asyncio.sleep(1.5)
+        if _pending_albums.get(task_key) is not album:
+            return
+        await _store_message_guide(album["guide_key"], album["chat_id"], sorted(album["message_ids"]))
+        _pending_albums.pop(task_key, None)
+        await state.clear()
+        await bot.send_message(
+            album["chat_id"],
+            "آلبوم راهنما با موفقیت ذخیره شد. کاربران همهٔ تصاویر یا ویدیوها را با کپشن دریافت می‌کنند.",
+            reply_markup=admin_menu_keyboard(),
+        )
+    except Exception:
+        logger.exception("Failed to save forwarded guide album")
+        await bot.send_message(task_key[0], "ذخیرهٔ آلبوم راهنما ناموفق بود. لطفاً دوباره تلاش کنید.")
+    finally:
+        if _pending_albums.get(task_key) is album and _pending_album_tasks.get(task_key) is asyncio.current_task():
+            _pending_albums.pop(task_key, None)
+        if _pending_album_tasks.get(task_key) is asyncio.current_task():
+            _pending_album_tasks.pop(task_key, None)
+
+
+@router.message(EditGuide.message)
 async def save_guide(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
     data = await state.get_data()
     guide_key = data["guide_key"]
-    await set_setting(guide_key, message.text)
+
+    if message.media_group_id:
+        task_key = (message.chat.id, message.from_user.id)
+        album = _pending_albums.get(task_key)
+        if album is None or album["media_group_id"] != message.media_group_id:
+            album = {
+                "guide_key": guide_key,
+                "chat_id": message.chat.id,
+                "media_group_id": message.media_group_id,
+                "message_ids": [],
+            }
+            _pending_albums[task_key] = album
+        album["message_ids"].append(message.message_id)
+
+        existing_task = _pending_album_tasks.pop(task_key, None)
+        if existing_task:
+            existing_task.cancel()
+        _pending_album_tasks[task_key] = asyncio.create_task(
+            _finish_album_after_quiet_period(state, message.bot, task_key, album)
+        )
+        return
+
+    # Keep only Telegram's chat/message identifiers. copy_message later asks
+    # Telegram to duplicate the original message, so no media touches disk.
+    await _store_message_guide(guide_key, message.chat.id, [message.message_id])
     await state.clear()
-    await message.answer("راهنما با موفقیت ذخیره شد.", reply_markup=admin_menu_keyboard())
+    await message.answer("راهنما با موفقیت ذخیره شد. کاربران آن را با همان قالب دریافت می‌کنند.", reply_markup=admin_menu_keyboard())
 
 
 @router.callback_query(F.data == "guide_add_app")
