@@ -41,7 +41,8 @@ class AdminWalletOverride(StatesGroup):
 
 
 class AdminBroadcast(StatesGroup):
-    text = State()
+    waiting = State()
+    confirm = State()
 
 
 class AdminDirectMessage(StatesGroup):

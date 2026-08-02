@@ -273,7 +273,8 @@ CONFIRM_WALLET_CHANGE = "آیا مطمئن هستید که می‌خواهید �
 WALLET_CHANGE_DONE = "موجودی کیف پول با موفقیت تغییر کرد."
 WALLET_NEGATIVE_ERROR = "موجودی کیف پول نمی‌تواند منفی باشد."
 
-ASK_BROADCAST_TEXT = "متن پیام همگانی را ارسال کنید:"
+ASK_BROADCAST_TEXT = "پیام همگانی را ارسال کنید (متن، عکس، ویدیو، آلبوم یا فوروارد):"
+BROADCAST_CONFIRM = "آیا می‌خواهید این پیام را برای {count} کاربر ارسال کنید؟"
 BROADCAST_STARTED = "ارسال پیام همگانی آغاز شد..."
 BROADCAST_PROGRESS = "ارسال شده: {sent}/{total} (خطا: {failed})"
 BROADCAST_DONE = "پیام همگانی برای {sent} نفر از {total} کاربر با موفقیت ارسال شد."

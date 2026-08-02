@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from aiogram import F, Router
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import default_state
 from aiogram.types import CallbackQuery, Message
 
 from .. import texts as t
@@ -48,7 +49,7 @@ async def back_to_main(message: Message, state: FSMContext):
     await message.answer(t.WELCOME, reply_markup=await _user_menu(message.from_user.id))
 
 
-@router.message(F.text == t.BTN_CANCEL_FLOW)
+@router.message(default_state, F.text == t.BTN_CANCEL_FLOW)
 async def cancel_flow(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(t.CANCELLED, reply_markup=await _user_menu(message.from_user.id))
@@ -94,7 +95,7 @@ async def request_wholesaler(message: Message):
     )
 
 
-@router.message(F.text == t.BTN_CONFIRM)
+@router.message(default_state, F.text == t.BTN_CONFIRM)
 async def confirm_wholesaler_request(message: Message):
     from ..db import async_session
     from ..models import User
