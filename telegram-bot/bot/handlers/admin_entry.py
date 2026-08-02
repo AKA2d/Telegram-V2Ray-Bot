@@ -1,6 +1,6 @@
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 
 from .. import texts as t
@@ -13,7 +13,10 @@ from ..stats_repo import get_period_stats
 
 router = Router(name="admin_entry")
 
-SET_WHOLESALER_FEE = State()
+class AdminPricingSettings(StatesGroup):
+    wholesaler_fee = State()
+    user_discount = State()
+    wholesaler_discount = State()
 
 
 @router.message(F.text == t.ADMIN_MENU)
@@ -119,12 +122,12 @@ async def open_guide_menu(message: Message):
 async def prompt_set_wholesaler_fee(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
-    await state.set_state(SET_WHOLESALER_FEE)
+    await state.set_state(AdminPricingSettings.wholesaler_fee)
     current = await get_setting("wholesaler_fee")
     await message.answer(f"هزینه فعلی عمده‌فروشی: {int(current):,} تومان\n\nمبلغ جدید را وارد کنید:", reply_markup=cancel_keyboard())
 
 
-@router.message(SET_WHOLESALER_FEE, F.text.regexp(r"^\d+$"))
+@router.message(AdminPricingSettings.wholesaler_fee, F.text.regexp(r"^\d+$"))
 async def try_set_wholesaler_fee(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         await state.clear()
@@ -136,3 +139,69 @@ async def try_set_wholesaler_fee(message: Message, state: FSMContext):
         return
     await set_setting("wholesaler_fee", str(value))
     await message.answer(f"هزینه عمده‌فروشی به {value:,} تومان تغییر کرد.", reply_markup=admin_menu_keyboard())
+
+
+async def _prompt_discount(message: Message, state: FSMContext, setting_key: str, state_value: State, label: str) -> None:
+    current = await get_setting(setting_key)
+    await state.set_state(state_value)
+    await message.answer(
+        f"تخفیف فعلی {label}: {int(current)}٪\n\nدرصد تخفیف جدید را از ۰ تا ۹۹ وارد کنید (۰ برای غیرفعال‌کردن):",
+        reply_markup=cancel_keyboard(),
+    )
+
+
+@router.message(F.text == t.ADMIN_MENU_USER_DISCOUNT)
+async def prompt_user_discount(message: Message, state: FSMContext):
+    if is_admin(message.from_user.id):
+        await _prompt_discount(message, state, "user_discount_percent", AdminPricingSettings.user_discount, "کاربران")
+
+
+@router.message(F.text == t.ADMIN_MENU_WHOLESALER_DISCOUNT)
+async def prompt_wholesaler_discount(message: Message, state: FSMContext):
+    if is_admin(message.from_user.id):
+        await _prompt_discount(message, state, "wholesaler_discount_percent", AdminPricingSettings.wholesaler_discount, "عمده‌فروشان")
+
+
+async def _save_discount(message: Message, state: FSMContext, setting_key: str, label: str) -> None:
+    raw_value = (message.text or "").strip().translate(
+        str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+    )
+    # Admins commonly enter values such as "20%" or "۲۰٪". Treat those as
+    # the percentage itself instead of leaving the FSM active on validation.
+    raw_value = raw_value.replace("%", "").replace("٪", "").strip()
+    try:
+        value = int(raw_value)
+    except (AttributeError, ValueError):
+        value = -1
+    if not 0 <= value <= 99:
+        await message.answer("درصد تخفیف باید عددی بین ۰ تا ۹۹ باشد.")
+        return
+    await set_setting(setting_key, str(value))
+    await state.clear()
+    await message.answer(f"تخفیف {label} روی {value}٪ تنظیم شد.", reply_markup=admin_menu_keyboard())
+
+
+@router.message(AdminPricingSettings.user_discount, F.text == t.MAIN_MENU_BUY)
+@router.message(AdminPricingSettings.wholesaler_discount, F.text == t.MAIN_MENU_BUY)
+async def start_purchase_after_discount_edit(message: Message, state: FSMContext):
+    await state.clear()
+    from .buy_service import start_buy
+
+    await start_buy(message, state)
+
+
+@router.message(AdminPricingSettings.user_discount, F.text.in_({t.BTN_CANCEL_FLOW, t.ADMIN_MENU}))
+@router.message(AdminPricingSettings.wholesaler_discount, F.text.in_({t.BTN_CANCEL_FLOW, t.ADMIN_MENU}))
+async def cancel_discount_edit(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("تنظیم تخفیف لغو شد.", reply_markup=admin_menu_keyboard())
+
+
+@router.message(AdminPricingSettings.user_discount)
+async def save_user_discount(message: Message, state: FSMContext):
+    await _save_discount(message, state, "user_discount_percent", "کاربران")
+
+
+@router.message(AdminPricingSettings.wholesaler_discount)
+async def save_wholesaler_discount(message: Message, state: FSMContext):
+    await _save_discount(message, state, "wholesaler_discount_percent", "عمده‌فروشان")

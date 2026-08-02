@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from aiogram.enums import ParseMode
 
 from .. import texts as t
 from ..cards_repo import get_next_card, get_round_robin_card
@@ -23,6 +24,7 @@ from ..models import User
 from ..orders_repo import create_order, update_order
 from ..panel_client import PanelAPIError, panel_client
 from ..plans_repo import get_plan, list_active_plans
+from ..pricing import format_price, plan_price_quote, safe_plan_name
 from ..services_repo import create_service, update_service
 from ..states import BuyService
 from ..wholesalers_repo import is_wholesaler
@@ -60,6 +62,8 @@ async def start_buy(message: Message, state: FSMContext):
                     await message.answer(t.SALES_CLOSEDMsg, reply_markup=main_menu(is_admin(user_id)))
                     return
     is_wl = await is_wholesaler(user_id)
+    from ..pricing import get_discount_percent
+    discount_percent = await get_discount_percent(is_wl)
     plans = await list_active_plans()
     if not plans:
         await message.answer(t.NO_PLANS_AVAILABLE, reply_markup=main_menu(is_admin(message.from_user.id)))
@@ -67,7 +71,11 @@ async def start_buy(message: Message, state: FSMContext):
     keyboard = plans_list_keyboard(plans, is_wholesaler=is_wl)
 
     await state.set_state(BuyService.choosing_plan)
-    await message.answer(format_plans_list(plans, is_wholesaler=is_wl), reply_markup=keyboard)
+    await message.answer(
+        format_plans_list(plans, is_wholesaler=is_wl, discount_percent=discount_percent),
+        reply_markup=keyboard,
+        parse_mode=ParseMode.HTML,
+    )
 
 
 @router.callback_query(BuyService.choosing_plan, F.data.startswith("plan_select:"))
@@ -79,18 +87,24 @@ async def ask_confirm(callback: CallbackQuery, state: FSMContext):
         return
 
     is_wl = await is_wholesaler(callback.from_user.id)
-    effective_price = plan.wholesale_price if is_wl and plan.wholesale_price else plan.price
+    original_price, effective_price, _ = await plan_price_quote(plan, is_wl)
 
-    await state.update_data(plan_type=plan_type, plan_id=plan.id, effective_price=int(effective_price))
+    await state.update_data(
+        plan_type=plan_type,
+        plan_id=plan.id,
+        effective_price=effective_price,
+        original_price=int(original_price),
+    )
     await state.set_state(BuyService.confirm)
     await callback.message.edit_text(
         t.ORDER_SUMMARY.format(
-            plan_name=plan.name,
+            plan_name=safe_plan_name(plan.name),
             months=plan.months,
             traffic_gb=plan.traffic_gb,
-            price=int(effective_price),
+            price=format_price(original_price, effective_price),
         ),
         reply_markup=plan_confirm_keyboard(plan_type, plan.id),
+        parse_mode=ParseMode.HTML,
     )
     await callback.answer()
 
@@ -118,6 +132,7 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
         return
     await state.update_data(order_started=True)
     effective_price = data.get("effective_price", int(plan.price))
+    original_price = data.get("original_price", effective_price)
     telegram_id = callback.from_user.id
 
     async with async_session() as session:
@@ -160,13 +175,14 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
-    await state.update_data(order_id=order.id, current_card_id=card.id, price=effective_price)
+    await state.update_data(order_id=order.id, current_card_id=card.id, price=effective_price, original_price=original_price)
     await state.set_state(BuyService.awaiting_receipt)
     await callback.message.answer(
         t.PAYMENT_INSTRUCTIONS.format(
-            amount=effective_price, card_number=card.card_number, holder_name=card.holder_name or ""
+            amount=format_price(original_price, effective_price), card_number=card.card_number, holder_name=card.holder_name or ""
         ),
         reply_markup=payment_keyboard(),
+        parse_mode=ParseMode.HTML,
     )
     await callback.answer()
 
@@ -248,9 +264,10 @@ async def next_card_buy(message: Message, state: FSMContext):
     await state.update_data(current_card_id=card.id)
     await message.answer(
         t.PAYMENT_INSTRUCTIONS.format(
-            amount=data["price"], card_number=card.card_number, holder_name=card.holder_name or ""
+            amount=format_price(data.get("original_price", data["price"]), data["price"]), card_number=card.card_number, holder_name=card.holder_name or ""
         ),
         reply_markup=payment_keyboard(),
+        parse_mode=ParseMode.HTML,
     )
 
 
@@ -294,7 +311,7 @@ async def _handle_receipt(message: Message, state: FSMContext, photo_file_id: st
         user_display=user_display,
         telegram_id=message.from_user.id,
         deep_link=_deep_link(message.from_user),
-        amount=data["price"],
+        amount=f"{data['price']:,}",
         card=card.card_number if card else "-",
     )
 

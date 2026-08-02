@@ -27,7 +27,7 @@ async def list_orders(message: Message):
         text = (
             f"سفارش #{order.id} — {order.type}\n"
             f"کاربر: {user_display}\n"
-            f"مبلغ: {int(order.amount)} تومان\n"
+            f"مبلغ: {int(order.amount):,} تومان\n"
             f"رسید: {order.receipt_text or '(عکس)'}"
         )
         from ...keyboards import order_review_keyboard

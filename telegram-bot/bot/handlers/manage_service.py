@@ -4,6 +4,7 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import default_state
 from aiogram.types import CallbackQuery, Message
+from aiogram.enums import ParseMode
 
 from .. import texts as t
 from ..config import is_admin
@@ -18,8 +19,10 @@ from ..keyboards import (
 )
 from ..panel_client import PanelAPIError, panel_client
 from ..plans_repo import get_plan, list_active_plans
+from ..pricing import format_price, get_discount_percent, plan_price_quote, safe_plan_name
 from ..services_repo import find_service_by_link_or_uuid, get_service, list_user_services, update_service
 from ..states import BuyService, ExtendService
+from ..wholesalers_repo import is_wholesaler
 
 router = Router(name="manage_service")
 
@@ -253,9 +256,12 @@ async def extend_choose_plan(callback: CallbackQuery, state: FSMContext):
         await state.clear()
         return
     await state.set_state(ExtendService.choosing_plan)
+    is_wl = await is_wholesaler(callback.from_user.id)
+    discount_percent = await get_discount_percent(is_wl)
     await callback.message.edit_text(
-        format_plans_list(plans),
+        format_plans_list(plans, is_wholesaler=is_wl, discount_percent=discount_percent),
         reply_markup=plans_list_keyboard(plans),
+        parse_mode=ParseMode.HTML,
     )
     await callback.answer()
 
@@ -278,24 +284,28 @@ async def extend_select_plan(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     service_id = data["service_id"]
     service = await get_service(service_id)
+    is_wl = await is_wholesaler(callback.from_user.id)
+    original_price, effective_price, _ = await plan_price_quote(plan, is_wl)
 
     await state.update_data(
         plan_id=plan.id,
         plan_name=plan.name,
         months=plan.months,
         traffic_gb=plan.traffic_gb,
-        price=int(plan.price),
+        price=effective_price,
+        original_price=int(original_price),
     )
     await state.set_state(ExtendService.confirm_plan)
     await callback.message.edit_text(
         t.EXTEND_PLAN_SUMMARY.format(
             id=service.id,
-            plan_name=plan.name,
+            plan_name=safe_plan_name(plan.name),
             months=plan.months,
             traffic_gb=plan.traffic_gb,
-            price=int(plan.price),
+            price=format_price(original_price, effective_price),
         ),
         reply_markup=extend_final_keyboard(plan.id),
+        parse_mode=ParseMode.HTML,
     )
     await callback.answer()
 
@@ -319,6 +329,7 @@ async def extend_apply(callback: CallbackQuery, state: FSMContext):
     add_months = data["months"]
     add_traffic = data["traffic_gb"]
     price = data["price"]
+    original_price = data.get("original_price", price)
 
     service = await get_service(service_id)
     if not service or not _can_manage(service, callback.from_user.id):
@@ -364,13 +375,14 @@ async def extend_apply(callback: CallbackQuery, state: FSMContext):
             await state.clear()
             return
 
-        await state.update_data(order_id=order.id, current_card_id=card.id, price=price)
+        await state.update_data(order_id=order.id, current_card_id=card.id, price=price, original_price=original_price)
         await state.set_state(BuyService.awaiting_receipt)
         await callback.message.answer(
             t.PAYMENT_INSTRUCTIONS.format(
-                amount=price, card_number=card.card_number, holder_name=card.holder_name or ""
+                amount=format_price(original_price, price), card_number=card.card_number, holder_name=card.holder_name or ""
             ),
             reply_markup=payment_keyboard(),
+            parse_mode=ParseMode.HTML,
         )
         await callback.answer()
 

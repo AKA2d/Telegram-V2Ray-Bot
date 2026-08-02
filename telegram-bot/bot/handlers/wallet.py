@@ -53,7 +53,7 @@ async def set_amount(message: Message, state: FSMContext):
     await state.update_data(order_id=order.id, amount=amount, current_card_id=card.id)
     await state.set_state(TopUp.awaiting_receipt)
     await message.answer(
-        t.PAYMENT_INSTRUCTIONS.format(amount=amount, card_number=card.card_number, holder_name=card.holder_name or ""),
+        t.PAYMENT_INSTRUCTIONS.format(amount=f"{amount:,}", card_number=card.card_number, holder_name=card.holder_name or ""),
         reply_markup=payment_keyboard(),
     )
 
@@ -67,7 +67,7 @@ async def next_card_topup(message: Message, state: FSMContext):
         return
     await state.update_data(current_card_id=card.id)
     await message.answer(
-        t.PAYMENT_INSTRUCTIONS.format(amount=data["amount"], card_number=card.card_number, holder_name=card.holder_name or ""),
+        t.PAYMENT_INSTRUCTIONS.format(amount=f"{data['amount']:,}", card_number=card.card_number, holder_name=card.holder_name or ""),
         reply_markup=payment_keyboard(),
     )
 
@@ -110,7 +110,7 @@ async def _handle_receipt(message: Message, state: FSMContext, photo_file_id: st
         user_display=user_display,
         telegram_id=message.from_user.id,
         deep_link=_deep_link(message.from_user),
-        amount=data["amount"],
+        amount=f"{data['amount']:,}",
         card=card.card_number if card else "-",
     )
 

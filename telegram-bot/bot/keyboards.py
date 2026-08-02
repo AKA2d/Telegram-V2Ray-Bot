@@ -1,6 +1,7 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 
 from . import texts as t
+from .pricing import base_plan_price, discounted_price, format_price, safe_plan_name
 
 
 SUPPORT_USERNAME = "GodVPN_admin"
@@ -165,6 +166,7 @@ def admin_menu_keyboard(sales_closed: bool | None = None) -> ReplyKeyboardMarkup
         [KeyboardButton(text=t.ADMIN_MENU_CARDS), KeyboardButton(text=t.ADMIN_MENU_TUNNEL)],
         [KeyboardButton(text=t.ADMIN_MENU_WHOLESALERS), KeyboardButton(text=t.ADMIN_MENU_STATS)],
         [KeyboardButton(text=t.ADMIN_MENU_TEST), KeyboardButton(text="💰 تنظیم هزینه عمده‌فروش")],
+        [KeyboardButton(text=t.ADMIN_MENU_USER_DISCOUNT), KeyboardButton(text=t.ADMIN_MENU_WHOLESALER_DISCOUNT)],
         [KeyboardButton(text="📖 مدیریت راهنماها")],
         [KeyboardButton(text=status_text)],
         [KeyboardButton(text=t.BTN_BACK)],
@@ -179,11 +181,12 @@ def plans_list_keyboard(plans: list, is_wholesaler: bool = False) -> InlineKeybo
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def format_plans_list(plans: list, is_wholesaler: bool = False) -> str:
+def format_plans_list(plans: list, is_wholesaler: bool = False, discount_percent: int = 0) -> str:
     lines = [t.CHOOSE_PLAN_PROMPT, ""]
     for i, p in enumerate(plans, 1):
-        price = p.wholesale_price if is_wholesaler and p.wholesale_price else p.price
-        lines.append(f"{i}. {p.name} — {int(price)} تومان")
+        original = base_plan_price(p, is_wholesaler)
+        price = discounted_price(original, discount_percent)
+        lines.append(f"{i}. {safe_plan_name(p.name)} — {format_price(original, price)} تومان")
     return "\n".join(lines)
 
 
@@ -233,8 +236,8 @@ def format_admin_plans_list(plans: list) -> str:
     lines = [t.PLANS_LIST_HEADER, ""]
     for i, p in enumerate(plans, 1):
         status = "✅" if p.is_active else "🚫"
-        wholesale_info = f" / عمده: {int(p.wholesale_price)}" if p.wholesale_price else ""
-        lines.append(f"{i}. {status} {p.name} — {p.months} ماه / {p.traffic_gb} گیگ / {int(p.price)} تومان{wholesale_info}")
+        wholesale_info = f" / عمده: {int(p.wholesale_price):,}" if p.wholesale_price else ""
+        lines.append(f"{i}. {status} {p.name} — {p.months} ماه / {p.traffic_gb} گیگ / {int(p.price):,} تومان{wholesale_info}")
     return "\n".join(lines)
 
 

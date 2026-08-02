@@ -13,6 +13,8 @@ DEFAULTS: dict[str, str] = {
     "test_days": "1",
     "test_enabled": "1",
     "wholesaler_fee": "1000000",
+    "user_discount_percent": "0",
+    "wholesaler_discount_percent": "0",
 }
 
 

@@ -166,6 +166,8 @@ ADMIN_MENU_TUNNEL = "🚇 مدیریت تانل"
 ADMIN_MENU_WHOLESALERS = "🛍️ مدیریت عمده‌فروشان"
 ADMIN_MENU_STATS = "📊 آمار پنل"
 ADMIN_MENU_TEST = "🧪 مدیریت سرویس تست"
+ADMIN_MENU_USER_DISCOUNT = "🏷 تخفیف کاربران"
+ADMIN_MENU_WHOLESALER_DISCOUNT = "🏷 تخفیف عمده‌فروشان"
 
 TEST_ALREADY_USED = "شما قبلاً از سرویس رایگان استفاده کرده‌اید."
 TEST_NOT_AVAILABLE = "سرویس رایگان در حال حاضر غیرفعال است."
