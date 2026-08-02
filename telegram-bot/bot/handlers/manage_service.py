@@ -215,6 +215,15 @@ async def increase_users(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("svc_extend:"))
 async def extend_start(callback: CallbackQuery, state: FSMContext):
+    from ..settings_repo import get_setting
+    from ..config import is_admin as _is_admin
+    from ..wholesalers_repo import is_wholesaler as _is_wholesaler
+
+    if (await get_setting("sales_closed")) == "1":
+        if not _is_admin(callback.from_user.id) and not await _is_wholesaler(callback.from_user.id):
+            await callback.answer(t.SALES_CLOSEDMsg, show_alert=True)
+            return
+
     service_id = int(callback.data.split(":")[1])
     service = await get_service(service_id)
     if not service or not _can_manage(service, callback.from_user.id):
