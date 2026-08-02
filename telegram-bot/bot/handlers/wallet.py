@@ -24,10 +24,7 @@ def _deep_link(user) -> str:
 
 @router.message(F.text == t.MAIN_MENU_TOPUP)
 async def start_topup(message: Message, state: FSMContext):
-    if (await get_setting("sales_closed")) == "1":
-        if not is_admin(message.from_user.id) and not await is_wholesaler(message.from_user.id):
-            await message.answer(t.SALES_CLOSEDMsg, reply_markup=main_menu(is_admin(message.from_user.id)))
-            return
+    # Wallet top-up is always allowed, even when sales are closed.
     await state.set_state(TopUp.amount)
     await message.answer(t.ASK_TOPUP_AMOUNT, reply_markup=cancel_keyboard())
 
