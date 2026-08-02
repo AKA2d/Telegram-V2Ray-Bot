@@ -148,17 +148,13 @@ def remove_app_keyboard(apps: dict) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def admin_menu_keyboard(sales_closed: bool | None = None) -> ReplyKeyboardMarkup:
+def admin_menu_keyboard(sales_closed: bool | None = None, tunnels_enabled: bool | None = None) -> ReplyKeyboardMarkup:
     if sales_closed is None:
-        import asyncio
-        from .settings_repo import get_setting
-        try:
-            loop = asyncio.get_running_loop()
-            # We're inside an async context, use a sync wrapper
-            sales_closed = False
-        except RuntimeError:
-            sales_closed = False
+        sales_closed = False
+    if tunnels_enabled is None:
+        tunnels_enabled = False
     status_text = t.SALES_CLOSED_LABEL_OFF if sales_closed else t.SALES_CLOSED_LABEL_ON
+    tunnel_text = t.ADMIN_MENU_TUNNEL_DEFAULT_ON if tunnels_enabled else t.ADMIN_MENU_TUNNEL_DEFAULT_OFF
     rows = [
         [KeyboardButton(text=t.ADMIN_MENU_ORDERS), KeyboardButton(text=t.ADMIN_MENU_PLANS)],
         [KeyboardButton(text=t.ADMIN_MENU_CUSTOMERS), KeyboardButton(text=t.ADMIN_MENU_WALLET)],
@@ -167,6 +163,7 @@ def admin_menu_keyboard(sales_closed: bool | None = None) -> ReplyKeyboardMarkup
         [KeyboardButton(text=t.ADMIN_MENU_WHOLESALERS), KeyboardButton(text=t.ADMIN_MENU_STATS)],
         [KeyboardButton(text=t.ADMIN_MENU_TEST), KeyboardButton(text="💰 تنظیم هزینه عمده‌فروش")],
         [KeyboardButton(text=t.ADMIN_MENU_USER_DISCOUNT), KeyboardButton(text=t.ADMIN_MENU_WHOLESALER_DISCOUNT)],
+        [KeyboardButton(text=tunnel_text)],
         [KeyboardButton(text="📖 مدیریت راهنماها")],
         [KeyboardButton(text=status_text)],
         [KeyboardButton(text=t.BTN_BACK)],

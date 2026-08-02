@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 import httpx
 
 from .config import PANEL_BASE_URL, PANEL_PASSWORD, PANEL_USERNAME
+from .settings_repo import get_setting
 
 logger = logging.getLogger("panel_client")
 
@@ -122,11 +123,14 @@ class PasarGuardClient:
         # admin approval of a receipt): create the panel user directly as
         # "active" with an explicit expire = now + duration, no inert
         # on_hold/disabled staging needed since the order is already paid.
+        # Group IDs control tunnel access: [1,2] = tunnels enabled, [2] = no tunnels.
+        tunnels_enabled = (await get_setting("new_users_have_tunnels")) == "1"
+        group_ids = [1, 2] if tunnels_enabled else [2]
         payload = {
             "username": username,
             "status": "active",
             "data_limit": data_limit_bytes,
-            "group_ids": [2],
+            "group_ids": group_ids,
             "expire": int(time.time()) + duration_seconds,
             "proxies": proxies or {"vless": {}, "vmess": {}},
         }

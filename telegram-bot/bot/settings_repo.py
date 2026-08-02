@@ -15,6 +15,7 @@ DEFAULTS: dict[str, str] = {
     "wholesaler_fee": "1000000",
     "user_discount_percent": "0",
     "wholesaler_discount_percent": "0",
+    "new_users_have_tunnels": "0",
 }
 
 

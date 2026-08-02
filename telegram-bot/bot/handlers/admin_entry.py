@@ -25,7 +25,8 @@ async def open_admin_menu(message: Message):
         await message.answer(t.NOT_AUTHORIZED, reply_markup=main_menu(False))
         return
     sales_closed = (await get_setting("sales_closed")) == "1"
-    await message.answer(t.ADMIN_MENU, reply_markup=admin_menu_keyboard(sales_closed))
+    tunnels_enabled = (await get_setting("new_users_have_tunnels")) == "1"
+    await message.answer(t.ADMIN_MENU, reply_markup=admin_menu_keyboard(sales_closed, tunnels_enabled))
 
 
 @router.message(F.text == t.SALES_CLOSED_LABEL_ON)
@@ -37,8 +38,23 @@ async def toggle_sales(message: Message):
     new_value = "0" if sales_closed else "1"
     await set_setting("sales_closed", new_value)
     now_closed = new_value == "1"
+    tunnels_enabled = (await get_setting("new_users_have_tunnels")) == "1"
     text = t.SALES_CLOSED_ON if now_closed else t.SALES_CLOSED_OFF
-    await message.answer(text, reply_markup=admin_menu_keyboard(now_closed))
+    await message.answer(text, reply_markup=admin_menu_keyboard(now_closed, tunnels_enabled))
+
+
+@router.message(F.text.in_({t.ADMIN_MENU_TUNNEL_DEFAULT_ON, t.ADMIN_MENU_TUNNEL_DEFAULT_OFF}))
+async def toggle_tunnel_default(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    current = await get_setting("new_users_have_tunnels")
+    new_value = "0" if current == "1" else "1"
+    await set_setting("new_users_have_tunnels", new_value)
+    tunnels_enabled = new_value == "1"
+    if tunnels_enabled:
+        await message.answer(t.TUNNEL_DEFAULT_ON, reply_markup=admin_menu_keyboard(tunnels_enabled=True))
+    else:
+        await message.answer(t.TUNNEL_DEFAULT_OFF, reply_markup=admin_menu_keyboard(tunnels_enabled=False))
 
 
 @router.message(F.text == t.ADMIN_MENU_STATS)

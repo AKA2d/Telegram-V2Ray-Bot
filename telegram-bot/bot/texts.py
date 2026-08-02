@@ -168,6 +168,8 @@ ADMIN_MENU_STATS = "📊 آمار پنل"
 ADMIN_MENU_TEST = "🧪 مدیریت سرویس تست"
 ADMIN_MENU_USER_DISCOUNT = "🏷 تخفیف کاربران"
 ADMIN_MENU_WHOLESALER_DISCOUNT = "🏷 تخفیف عمده‌فروشان"
+ADMIN_MENU_TUNNEL_DEFAULT_ON = "🟢 تانل: فعال"
+ADMIN_MENU_TUNNEL_DEFAULT_OFF = "🔴 تانل: غیرفعال"
 
 TEST_ALREADY_USED = "شما قبلاً از سرویس رایگان استفاده کرده‌اید."
 TEST_NOT_AVAILABLE = "سرویس رایگان در حال حاضر غیرفعال است."
@@ -291,6 +293,9 @@ NO_CARDS = "هیچ کارتی ثبت نشده است."
 ASK_TUNNEL_TARGET = "یوزرنیم/UUID حساب مورد نظر یا 'همه' برای اعمال روی همه حساب‌ها را وارد کنید:"
 TUNNEL_ADDED = "تانل با موفقیت اضافه شد."
 TUNNEL_REMOVED = "تانل با موفقیت حذف شد."
+
+TUNNEL_DEFAULT_ON = "تانل پیش‌فرض برای کاربران جدید فعال شد ✅\n\nکاربران جدید اکنون به تانل دسترسی خواهند داشت."
+TUNNEL_DEFAULT_OFF = "تانل پیش‌فرض برای کاربران جدید غیرفعال شد ❌\n\nکاربران جدید بدون تانل ایجاد خواهند شد."
 
 POST_PURCHASE_HINT = (
     "📱 برای راهنمای اتصال، از منوی «روش اتصال» استفاده کنید.\n"
