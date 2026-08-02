@@ -235,7 +235,7 @@ class PasarGuardClient:
         for protocol, tags in inbounds.items():
             if tunnel_inbound_tag not in tags:
                 tags.append(tunnel_inbound_tag)
-        resp = await self._request("PUT", f"/api/user/{username_or_uuid}", json={"inbounds": inbounds})
+        resp = await self._request("PUT", f"/api/user/{username_or_uuid}", json={"group_ids": [1,2]})
         if resp.status_code != 200:
             raise PanelAPIError(f"Failed to add tunnel: {resp.status_code} {resp.text}", resp.status_code)
 
@@ -245,7 +245,7 @@ class PasarGuardClient:
         for protocol, tags in inbounds.items():
             if tunnel_inbound_tag in tags:
                 tags.remove(tunnel_inbound_tag)
-        resp = await self._request("PUT", f"/api/user/{username_or_uuid}", json={"inbounds": inbounds})
+        resp = await self._request("PUT", f"/api/user/{username_or_uuid}", json={"group_ids": [2]})
         if resp.status_code != 200:
             raise PanelAPIError(f"Failed to remove tunnel: {resp.status_code} {resp.text}", resp.status_code)
 

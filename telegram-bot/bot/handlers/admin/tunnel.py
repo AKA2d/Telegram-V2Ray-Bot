@@ -15,7 +15,7 @@ router = Router(name="admin_tunnel")
 router.message.middleware(AdminOnlyMiddleware())
 router.callback_query.middleware(AdminOnlyMiddleware())
 
-TUNNEL_TAG = "tunnel"
+TUNNEL_TAG = "alfa"
 
 
 def _action_keyboard(target: str) -> InlineKeyboardMarkup:
