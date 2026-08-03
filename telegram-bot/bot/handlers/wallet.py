@@ -32,6 +32,10 @@ async def start_topup(message: Message, state: FSMContext):
 @router.message(TopUp.amount)
 async def set_amount(message: Message, state: FSMContext):
     try:
+        if (message.text == t.BTN_CANCEL_FLOW):
+            await state.clear()
+            await message.answer(t.CANCELLED, reply_markup=main_menu(is_admin(message.from_user.id)))
+            return
         amount = int(message.text.strip())
         if amount <= 0:
             raise ValueError
@@ -77,6 +81,11 @@ async def receipt_photo(message: Message, state: FSMContext):
 @router.message(TopUp.awaiting_receipt, F.text)
 async def receipt_text(message: Message, state: FSMContext):
     if message.text == t.BTN_NEXT_CARD:
+        return
+    if message.text == t.BTN_CANCEL_FLOW:
+        await state.clear()
+        from .start import _user_menu
+        await message.answer(t.CANCELLED, reply_markup=await _user_menu(message.from_user.id))
         return
     await _handle_receipt(message, state, photo_file_id=None, text=message.text)
 

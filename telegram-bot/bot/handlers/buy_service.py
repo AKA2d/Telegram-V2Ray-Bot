@@ -280,6 +280,10 @@ async def receipt_photo(message: Message, state: FSMContext):
 async def receipt_text(message: Message, state: FSMContext):
     if message.text == t.BTN_NEXT_CARD:
         return
+    if message.text == t.BTN_CANCEL_FLOW:
+        await state.clear()
+        await message.answer(t.CANCELLED, reply_markup=main_menu(is_admin(message.from_user.id)))
+        return
     await _handle_receipt(message, state, photo_file_id=None, text=message.text)
 
 
