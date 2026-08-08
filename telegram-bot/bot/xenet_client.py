@@ -58,7 +58,7 @@ class XenetClient:
             raise XenetAPIError("Xenet API authentication failed", 401)
         if resp.status_code == 402:
             raise XenetAPIError("Insufficient balance on Xenet account", 402)
-        if resp.status_code != 200:
+        if resp.status_code < 200 or resp.status_code >= 300:
             raise XenetAPIError(f"Xenet API error: {resp.status_code} {resp.text}", resp.status_code)
         return resp
 
