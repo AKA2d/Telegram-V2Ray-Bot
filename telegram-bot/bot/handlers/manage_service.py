@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import time
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -18,6 +19,7 @@ from ..keyboards import (
     services_list_keyboard,
 )
 from ..panel_client import PanelAPIError, panel_client
+from ..xenet_client import XenetAPIError, xenet_client
 from ..plans_repo import get_plan, list_active_plans
 from ..pricing import format_price, get_discount_percent, plan_price_quote, safe_plan_name
 from ..services_repo import find_service_by_link_or_uuid, get_service, list_user_services, update_service
@@ -58,23 +60,30 @@ def _format_traffic(bytes_used: int | None, total_gb: int) -> str:
 async def _format_service(service) -> str:
     remaining_days = _format_remaining_days(service.expires_at)
 
-    remaining_traffic = f"{service.traffic_gb} گیگ"
-    if service.status == "active":
-        try:
-            panel_user = await panel_client.get_user(service.panel_username)
-            bytes_used = panel_user.raw.get("usage") or panel_user.raw.get("data_usage") or panel_user.raw.get("used_traffic")
-            if bytes_used:
-                remaining_traffic = _format_traffic(bytes_used, service.traffic_gb)
-        except PanelAPIError:
-            pass
+    # Handle traffic display based on service type
+    if service.service_type == "unlimited":
+        remaining_traffic = "نامحدود"
+    else:
+        remaining_traffic = f"{service.traffic_gb} گیگ"
+        if service.status == "active":
+            try:
+                panel_user = await panel_client.get_user(service.panel_username)
+                bytes_used = panel_user.raw.get("usage") or panel_user.raw.get("data_usage") or panel_user.raw.get("used_traffic")
+                if bytes_used:
+                    remaining_traffic = _format_traffic(bytes_used, service.traffic_gb)
+            except PanelAPIError:
+                pass
 
     link = service.subscription_link or "—"
     if service.status != "active":
         link = "غیرفعال"
 
+    # Add service type indicator
+    type_indicator = "♾️ نامحدود" if service.service_type == "unlimited" else "📊 ترافیکی"
+
     return t.SERVICE_DETAIL.format(
         id=service.id,
-        panel_username=service.panel_username,
+        panel_username=f"{service.panel_username} ({type_indicator})",
         months=service.months,
         traffic_gb=service.traffic_gb,
         status=service.status,
@@ -117,18 +126,32 @@ async def regenerate_service(callback: CallbackQuery):
         await callback.answer("سرویس فعال نیست.", show_alert=True)
         return
     try:
-        panel_user = await panel_client.regenerate_subscription(service.panel_uuid or service.panel_username)
-    except PanelAPIError:
+        if service.service_type == "unlimited" and service.xenet_account_id:
+            # Unlimited service - get config from Xenet
+            config_data = await xenet_client.get_v2_config(service.xenet_account_id)
+            new_link = config_data.get("sub_link", service.subscription_link)
+            await update_service(service.id, subscription_link=new_link)
+            if new_link:
+                from ..qr_gen import generate_qr_image
+                text = t.REGENERATE_DONE.format(link=new_link)
+                qr_photo = generate_qr_image(new_link)
+                await callback.message.answer_photo(qr_photo, caption=text)
+            else:
+                await callback.message.answer(t.REGENERATE_DONE.format(link="—"))
+        else:
+            # Traffic-based service - regenerate on Panel
+            panel_user = await panel_client.regenerate_subscription(service.panel_uuid or service.panel_username)
+            await update_service(service.id, subscription_link=panel_user.subscription_link, panel_uuid=panel_user.uuid or service.panel_uuid)
+            if panel_user.subscription_link:
+                from ..qr_gen import generate_qr_image
+                text = t.REGENERATE_DONE.format(link=panel_user.subscription_link)
+                qr_photo = generate_qr_image(panel_user.subscription_link)
+                await callback.message.answer_photo(qr_photo, caption=text)
+            else:
+                await callback.message.answer(t.REGENERATE_DONE.format(link="—"))
+    except (PanelAPIError, XenetAPIError):
         await callback.answer(t.ERROR_GENERIC, show_alert=True)
         return
-    await update_service(service.id, subscription_link=panel_user.subscription_link, panel_uuid=panel_user.uuid or service.panel_uuid)
-    if panel_user.subscription_link:
-        from ..qr_gen import generate_qr_image
-        text = t.REGENERATE_DONE.format(link=panel_user.subscription_link)
-        qr_photo = generate_qr_image(panel_user.subscription_link)
-        await callback.message.answer_photo(qr_photo, caption=text)
-    else:
-        await callback.message.answer(t.REGENERATE_DONE.format(link="—"))
     await callback.answer()
 
 
@@ -162,8 +185,13 @@ async def disable_service(callback: CallbackQuery):
         await callback.answer("سرویس در حال حاضر فعال نیست.", show_alert=True)
         return
     try:
-        await panel_client.disable_user(service.panel_username)
-    except PanelAPIError:
+        if service.service_type == "unlimited" and service.xenet_account_id:
+            # Unlimited service - toggle on Xenet
+            await xenet_client.toggle_v2_account(service.xenet_account_id)
+        else:
+            # Traffic-based service - disable on Panel
+            await panel_client.disable_user(service.panel_username)
+    except (PanelAPIError, XenetAPIError):
         await callback.answer(t.ERROR_GENERIC, show_alert=True)
         return
     await update_service(service_id, status="disabled")
@@ -182,8 +210,13 @@ async def enable_service(callback: CallbackQuery):
         await callback.answer("سرویس در حال حاضر فعال است.", show_alert=True)
         return
     try:
-        await panel_client.enable_user(service.panel_username)
-    except PanelAPIError:
+        if service.service_type == "unlimited" and service.xenet_account_id:
+            # Unlimited service - toggle on Xenet
+            await xenet_client.toggle_v2_account(service.xenet_account_id)
+        else:
+            # Traffic-based service - enable on Panel
+            await panel_client.enable_user(service.panel_username)
+    except (PanelAPIError, XenetAPIError):
         await callback.answer(t.ERROR_GENERIC, show_alert=True)
         return
     await update_service(service_id, status="active")
@@ -199,8 +232,13 @@ async def delete_service(callback: CallbackQuery):
         await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
         return
     try:
-        await panel_client.delete_user(service.panel_username)
-    except PanelAPIError:
+        if service.service_type == "unlimited" and service.xenet_account_id:
+            # Unlimited service - refund on Xenet
+            await xenet_client.refund_v2_account(service.xenet_account_id)
+        else:
+            # Traffic-based service - delete on Panel
+            await panel_client.delete_user(service.panel_username)
+    except (PanelAPIError, XenetAPIError):
         await callback.answer(t.ERROR_GENERIC, show_alert=True)
         return
     await update_service(service_id, status="deleted")
@@ -234,15 +272,19 @@ async def extend_start(callback: CallbackQuery, state: FSMContext):
         return
 
     remaining_days = f"{_format_remaining_days(service.expires_at)} روز"
-    remaining_traffic = f"{service.traffic_gb} گیگ"
-    if service.status == "active":
-        try:
-            panel_user = await panel_client.get_user(service.panel_username)
-            bytes_used = panel_user.raw.get("usage") or panel_user.raw.get("data_usage") or panel_user.raw.get("used_traffic")
-            if bytes_used:
-                remaining_traffic = _format_traffic(bytes_used, service.traffic_gb)
-        except PanelAPIError:
-            pass
+    # Handle traffic display based on service type
+    if service.service_type == "unlimited":
+        remaining_traffic = "نامحدود"
+    else:
+        remaining_traffic = f"{service.traffic_gb} گیگ"
+        if service.status == "active":
+            try:
+                panel_user = await panel_client.get_user(service.panel_username)
+                bytes_used = panel_user.raw.get("usage") or panel_user.raw.get("data_usage") or panel_user.raw.get("used_traffic")
+                if bytes_used:
+                    remaining_traffic = _format_traffic(bytes_used, service.traffic_gb)
+            except PanelAPIError:
+                pass
 
     await state.update_data(service_id=service_id)
     await state.set_state(ExtendService.confirm)
@@ -259,7 +301,13 @@ async def extend_start(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(ExtendService.confirm, F.data.startswith("extend_confirm:yes:"))
 async def extend_choose_plan(callback: CallbackQuery, state: FSMContext):
-    plans = await list_active_plans()
+    data = await state.get_data()
+    service_id = data.get("service_id")
+    service = await get_service(service_id) if service_id else None
+    
+    # Filter plans by service type if we know the service
+    service_type = service.service_type if service else None
+    plans = await list_active_plans(service_type=service_type)
     if not plans:
         await callback.answer(t.NO_PLANS_AVAILABLE, show_alert=True)
         await state.clear()
@@ -296,6 +344,12 @@ async def extend_select_plan(callback: CallbackQuery, state: FSMContext):
     is_wl = await is_wholesaler(callback.from_user.id)
     original_price, effective_price, _ = await plan_price_quote(plan, is_wl)
 
+    # Handle traffic display based on service type
+    if plan.service_type == "unlimited":
+        traffic_text = "نامحدود"
+    else:
+        traffic_text = f"{plan.traffic_gb} گیگ"
+
     await state.update_data(
         plan_id=plan.id,
         plan_name=plan.name,
@@ -310,7 +364,7 @@ async def extend_select_plan(callback: CallbackQuery, state: FSMContext):
             id=service.id,
             plan_name=safe_plan_name(plan.name),
             months=plan.months,
-            traffic_gb=plan.traffic_gb,
+            traffic_gb=traffic_text,
             price=format_price(original_price, effective_price),
         ),
         reply_markup=extend_final_keyboard(plan.id),
@@ -397,12 +451,11 @@ async def extend_apply(callback: CallbackQuery, state: FSMContext):
 
 
 async def _apply_extend(service, add_months: int, add_traffic: int):
-    """Apply extend to service in DB and panel."""
+    """Apply extend to service in DB and provider."""
     from datetime import timedelta
     from ..db import async_session
     from ..services_repo import update_service
 
-    new_traffic = service.traffic_gb + add_traffic
     now = datetime.now(timezone.utc)
     if service.expires_at:
         expires = service.expires_at if service.expires_at.tzinfo else service.expires_at.replace(tzinfo=timezone.utc)
@@ -413,14 +466,26 @@ async def _apply_extend(service, add_months: int, add_traffic: int):
     else:
         new_expires = now + timedelta(days=add_months * 30)
 
-    await update_service(service.id, traffic_gb=new_traffic, expires_at=new_expires, months=service.months + add_months)
+    if service.service_type == "unlimited":
+        # Unlimited service - renew on Xenet
+        new_traffic = 0  # Unlimited has no traffic limit
+        if service.xenet_account_id:
+            try:
+                idempotency_key = f"extend_{service.id}_{int(time.time())}"
+                await xenet_client.renew_v2_account(service.xenet_account_id, idempotency_key=idempotency_key)
+            except XenetAPIError:
+                pass  # Continue with DB update even if Xenet fails
+    else:
+        # Traffic-based service - update on Panel
+        new_traffic = service.traffic_gb + add_traffic
+        try:
+            data_limit_bytes = int(new_traffic * 1024**3)
+            expire_timestamp = int(new_expires.timestamp())
+            await panel_client.update_user_limits(service.panel_username, data_limit_bytes, expire_timestamp)
+        except PanelAPIError:
+            pass
 
-    try:
-        data_limit_bytes = int(new_traffic * 1024**3)
-        expire_timestamp = int(new_expires.timestamp())
-        await panel_client.update_user_limits(service.panel_username, data_limit_bytes, expire_timestamp)
-    except PanelAPIError:
-        pass
+    await update_service(service.id, traffic_gb=new_traffic, expires_at=new_expires, months=service.months + add_months)
 
 
 @router.message(default_state, F.text.regexp(r"^[A-Za-z0-9\-_:/.]{6,}$"))

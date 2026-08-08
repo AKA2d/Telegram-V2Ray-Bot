@@ -72,3 +72,7 @@ REQUIRED_CHANNEL_ID = os.environ.get("REQUIRED_CHANNEL_ID", "").strip() or None
 DIRECT_NODE_TAGS = [
     tag.strip() for tag in os.environ.get("DIRECT_NODE_TAGS", "").split(",") if tag.strip()
 ]
+
+# Xenet API key for unlimited services
+XENET_API_KEY = os.environ.get("XENET_API_KEY", "")
+XENET_BASE_URL = "https://api.xenet.space/api/reseller/v1"

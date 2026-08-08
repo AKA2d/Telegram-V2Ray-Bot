@@ -3,6 +3,8 @@ import uuid
 from decimal import Decimal
 
 from datetime import datetime, timezone
+import time
+import uuid
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -24,6 +26,7 @@ from ...keyboards import (
 from ...models import User, WalletAuditLog
 from ...orders_repo import count_user_orders
 from ...panel_client import PanelAPIError, panel_client
+from ...xenet_client import XenetAPIError, xenet_client
 from ...plans_repo import get_plan, list_active_plans
 from ...services_repo import count_user_services, create_service, list_user_services, update_service, get_service
 from ...states import AdminCustomerLookup
@@ -119,21 +122,28 @@ async def view_customer_service(callback: CallbackQuery, state: FSMContext = Non
         delta = expires - now
         remaining_days = "منقضی شده" if delta.days <= 0 else f"{delta.days} روز"
 
-    remaining_traffic = f"{service.traffic_gb} گیگ"
-    if service.status == "active":
-        try:
-            panel_user = await panel_client.get_user(service.panel_username)
-            bytes_used = panel_user.raw.get("usage") or panel_user.raw.get("data_usage") or panel_user.raw.get("used_traffic")
-            if bytes_used:
-                used_gb = bytes_used / (1024 ** 3)
-                remaining = max(0, float(service.traffic_gb) - used_gb)
-                remaining_traffic = f"{remaining:.1f} از {service.traffic_gb} گیگ"
-        except PanelAPIError:
-            pass
+    # Handle traffic display based on service type
+    if service.service_type == "unlimited":
+        remaining_traffic = "نامحدود"
+    else:
+        remaining_traffic = f"{service.traffic_gb} گیگ"
+        if service.status == "active":
+            try:
+                panel_user = await panel_client.get_user(service.panel_username)
+                bytes_used = panel_user.raw.get("usage") or panel_user.raw.get("data_usage") or panel_user.raw.get("used_traffic")
+                if bytes_used:
+                    used_gb = bytes_used / (1024 ** 3)
+                    remaining = max(0, float(service.traffic_gb) - used_gb)
+                    remaining_traffic = f"{remaining:.1f} از {service.traffic_gb} گیگ"
+            except PanelAPIError:
+                pass
+
+    # Add service type indicator
+    type_indicator = "♾️ نامحدود" if service.service_type == "unlimited" else "📊 ترافیکی"
 
     text = t.CUSTOMER_SERVICE_DETAIL.format(
         id=service.id,
-        panel_username=service.panel_username,
+        panel_username=f"{service.panel_username} ({type_indicator})",
         months=service.months,
         traffic_gb=service.traffic_gb,
         status=service.status,
@@ -206,8 +216,11 @@ async def confirm_action(callback: CallbackQuery):
 
     if action == "disable":
         try:
-            await panel_client.disable_user(service.panel_username)
-        except PanelAPIError as exc:
+            if service.service_type == "unlimited" and service.xenet_account_id:
+                await xenet_client.toggle_v2_account(service.xenet_account_id)
+            else:
+                await panel_client.disable_user(service.panel_username)
+        except (PanelAPIError, XenetAPIError) as exc:
             await callback.answer(f"خطا در پنل: {exc}", show_alert=True)
             return
         await update_service(service_id, status="disabled")
@@ -215,8 +228,11 @@ async def confirm_action(callback: CallbackQuery):
 
     elif action == "enable":
         try:
-            await panel_client.enable_user(service.panel_username)
-        except PanelAPIError as exc:
+            if service.service_type == "unlimited" and service.xenet_account_id:
+                await xenet_client.toggle_v2_account(service.xenet_account_id)
+            else:
+                await panel_client.enable_user(service.panel_username)
+        except (PanelAPIError, XenetAPIError) as exc:
             await callback.answer(f"خطا در پنل: {exc}", show_alert=True)
             return
         await update_service(service_id, status="active")
@@ -224,8 +240,11 @@ async def confirm_action(callback: CallbackQuery):
 
     elif action == "delete":
         try:
-            await panel_client.delete_user(service.panel_username)
-        except PanelAPIError as exc:
+            if service.service_type == "unlimited" and service.xenet_account_id:
+                await xenet_client.refund_v2_account(service.xenet_account_id)
+            else:
+                await panel_client.delete_user(service.panel_username)
+        except (PanelAPIError, XenetAPIError) as exc:
             await callback.answer(f"خطا در پنل: {exc}", show_alert=True)
             return
         await update_service(service_id, status="deleted")
@@ -254,18 +273,32 @@ async def admin_regenerate_service(callback: CallbackQuery):
         await callback.answer("سرویس فعال نیست.", show_alert=True)
         return
     try:
-        panel_user = await panel_client.regenerate_subscription(service.panel_username)
-    except PanelAPIError:
+        if service.service_type == "unlimited" and service.xenet_account_id:
+            # Unlimited service - get config from Xenet
+            config_data = await xenet_client.get_v2_config(service.xenet_account_id)
+            new_link = config_data.get("sub_link", service.subscription_link)
+            await update_service(service.id, subscription_link=new_link)
+            if new_link:
+                from ...qr_gen import generate_qr_image
+                text = f"لینک جدید:\n{new_link}"
+                qr_photo = generate_qr_image(new_link)
+                await callback.message.answer_photo(qr_photo, caption=text)
+            else:
+                await callback.message.answer("خطا در بازسازی لینک.")
+        else:
+            # Traffic-based service - regenerate on Panel
+            panel_user = await panel_client.regenerate_subscription(service.panel_username)
+            await update_service(service.id, subscription_link=panel_user.subscription_link, panel_uuid=panel_user.uuid or service.panel_uuid)
+            if panel_user.subscription_link:
+                from ...qr_gen import generate_qr_image
+                text = f"لینک جدید:\n{panel_user.subscription_link}"
+                qr_photo = generate_qr_image(panel_user.subscription_link)
+                await callback.message.answer_photo(qr_photo, caption=text)
+            else:
+                await callback.message.answer("خطا در بازسازی لینک.")
+    except (PanelAPIError, XenetAPIError):
         await callback.answer(t.ERROR_GENERIC, show_alert=True)
         return
-    await update_service(service.id, subscription_link=panel_user.subscription_link, panel_uuid=panel_user.uuid or service.panel_uuid)
-    if panel_user.subscription_link:
-        from ...qr_gen import generate_qr_image
-        text = f"لینک جدید:\n{panel_user.subscription_link}"
-        qr_photo = generate_qr_image(panel_user.subscription_link)
-        await callback.message.answer_photo(qr_photo, caption=text)
-    else:
-        await callback.message.answer("خطا در بازسازی لینک.")
     await callback.answer()
 
 
@@ -340,7 +373,6 @@ async def add_service_confirm(callback: CallbackQuery, state: FSMContext):
             return
 
         from datetime import timedelta as td
-        new_traffic = float(service.traffic_gb) + float(plan.traffic_gb)
         now = datetime.now(timezone.utc)
         if service.expires_at:
             expires = service.expires_at if service.expires_at.tzinfo else service.expires_at.replace(tzinfo=timezone.utc)
@@ -351,56 +383,106 @@ async def add_service_confirm(callback: CallbackQuery, state: FSMContext):
         else:
             new_expires = now + td(days=plan.months * 30)
 
-        await update_service(extend_service_id, traffic_gb=new_traffic, expires_at=new_expires, months=service.months + plan.months)
-        try:
-            data_limit_bytes = int(new_traffic * 1024**3)
-            expire_timestamp = int(new_expires.timestamp())
-            await panel_client.update_user_limits(service.panel_username, data_limit_bytes, expire_timestamp)
-        except PanelAPIError:
-            pass
+        if service.service_type == "unlimited":
+            # Unlimited service - renew on Xenet
+            new_traffic = 0
+            try:
+                idempotency_key = f"admin_extend_{service.id}_{int(time.time())}"
+                await xenet_client.renew_v2_account(service.xenet_account_id, idempotency_key=idempotency_key)
+            except XenetAPIError:
+                pass  # Continue with DB update even if Xenet fails
+        else:
+            # Traffic-based service - update on Panel
+            new_traffic = float(service.traffic_gb) + float(plan.traffic_gb)
+            try:
+                data_limit_bytes = int(new_traffic * 1024**3)
+                expire_timestamp = int(new_expires.timestamp())
+                await panel_client.update_user_limits(service.panel_username, data_limit_bytes, expire_timestamp)
+            except PanelAPIError:
+                pass
 
+        await update_service(extend_service_id, traffic_gb=new_traffic, expires_at=new_expires, months=service.months + plan.months)
         await state.clear()
-        await callback.message.edit_text(f"سرویس #{extend_service_id} با موفقیت تمدید شد.\n\n+{plan.months} ماه / +{plan.traffic_gb} گیگ")
+        await callback.message.edit_text(f"سرویس #{extend_service_id} با موفقیت تمدید شد.\n\n+{plan.months} ماه")
         await callback.answer()
         return
 
     # Normal add service flow
-    panel_username = f"tg{telegram_id}_{uuid.uuid4().hex[:6]}"
-    data_limit_bytes = int(plan.traffic_gb * 1024**3)
-    duration_seconds = plan.months * 30 * 86400
+    if plan.service_type == "unlimited":
+        # Unlimited service - create on Xenet
+        try:
+            idempotency_key = f"admin_add_{telegram_id}_{int(time.time())}"
+            xenet_config = await xenet_client.create_v2_account(
+                users=plan.user_count,
+                idempotency_key=idempotency_key,
+            )
+            subscription_link = xenet_config.sub_link
+            xenet_account_id = xenet_config.id
+            panel_username = f"tg{telegram_id}_{uuid.uuid4().hex[:6]}"
+        except XenetAPIError as exc:
+            logger.exception("Failed to create Xenet account for customer %s", telegram_id)
+            await callback.answer(f"خطا در Xenet: {exc}", show_alert=True)
+            return
 
-    try:
-        panel_user = await panel_client.create_active_user(
-            username=panel_username,
-            data_limit_bytes=data_limit_bytes,
-            duration_seconds=duration_seconds,
+        from datetime import timedelta
+        duration_seconds = plan.months * 30 * 86400
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)
+
+        await create_service(
+            owner_telegram_id=telegram_id,
+            service_type="unlimited",
+            panel_username=panel_username,
+            panel_uuid=None,
+            subscription_link=subscription_link,
+            status="active",
+            user_count=plan.user_count,
+            months=plan.months,
+            traffic_gb=0,
+            price=0,
+            expires_at=expires_at,
+            xenet_account_id=xenet_account_id,
         )
-    except PanelAPIError as exc:
-        logger.exception("Failed to create panel user for customer %s", telegram_id)
-        await callback.answer(f"خطا در پنل: {exc}", show_alert=True)
-        return
+    else:
+        # Traffic-based service - create on Panel
+        panel_username = f"tg{telegram_id}_{uuid.uuid4().hex[:6]}"
+        data_limit_bytes = int(plan.traffic_gb * 1024**3)
+        duration_seconds = plan.months * 30 * 86400
 
-    from datetime import timedelta
+        try:
+            panel_user = await panel_client.create_active_user(
+                username=panel_username,
+                data_limit_bytes=data_limit_bytes,
+                duration_seconds=duration_seconds,
+            )
+        except PanelAPIError as exc:
+            logger.exception("Failed to create panel user for customer %s", telegram_id)
+            await callback.answer(f"خطا در پنل: {exc}", show_alert=True)
+            return
 
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)
-    await create_service(
-        owner_telegram_id=telegram_id,
-        panel_username=panel_user.username,
-        panel_uuid=panel_user.uuid,
-        subscription_link=panel_user.subscription_link,
-        status="active",
-        user_count=plan.user_count,
-        months=plan.months,
-        traffic_gb=plan.traffic_gb,
-        price=0,
-        expires_at=expires_at,
-    )
+        from datetime import timedelta
+
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)
+        await create_service(
+            owner_telegram_id=telegram_id,
+            service_type="traffic_based",
+            panel_username=panel_user.username,
+            panel_uuid=panel_user.uuid,
+            subscription_link=panel_user.subscription_link,
+            status="active",
+            user_count=plan.user_count,
+            months=plan.months,
+            traffic_gb=plan.traffic_gb,
+            price=0,
+            expires_at=expires_at,
+        )
+
+        subscription_link = panel_user.subscription_link
 
     await state.clear()
-    if panel_user.subscription_link:
+    if subscription_link:
         from ...qr_gen import generate_qr_image
-        text = t.CUSTOMER_SERVICE_ADDED.format(link=panel_user.subscription_link)
-        qr_photo = generate_qr_image(panel_user.subscription_link)
+        text = t.CUSTOMER_SERVICE_ADDED.format(link=subscription_link)
+        qr_photo = generate_qr_image(subscription_link)
         await callback.message.answer_photo(qr_photo, caption=text)
     else:
         await callback.message.edit_text(

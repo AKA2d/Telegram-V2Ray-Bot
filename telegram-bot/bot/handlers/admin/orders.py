@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import time
 
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
@@ -6,6 +7,7 @@ from aiogram.types import CallbackQuery, Message
 from ... import texts as t
 from ...orders_repo import get_order, list_pending_orders, transition_order_status, update_order
 from ...panel_client import PanelAPIError, panel_client
+from ...xenet_client import XenetAPIError, xenet_client
 from ...services_repo import get_service, update_service
 from ...settings_repo import get_setting, set_setting
 from ...users_repo import get_or_create_user
@@ -67,20 +69,34 @@ async def approve_order(callback: CallbackQuery):
             return
 
         try:
-            duration_seconds = service.months * 30 * 86400
-            data_limit_bytes = int(service.traffic_gb * 1024**3)
-            # A prior request can succeed at the panel while its response is
-            # lost. On retry, reuse that account rather than creating another.
-            try:
-                panel_user = await panel_client.get_user(service.panel_username)
-            except PanelAPIError as lookup_error:
-                if lookup_error.status_code != 404:
-                    raise
-                panel_user = await panel_client.create_active_user(
-                    username=service.panel_username,
-                    data_limit_bytes=data_limit_bytes,
-                    duration_seconds=duration_seconds,
+            if service.service_type == "unlimited":
+                # Unlimited service - use Xenet API
+                idempotency_key = f"admin_order_{order.id}_{int(time.time())}"
+                xenet_config = await xenet_client.create_v2_account(
+                    users=service.user_count,
+                    idempotency_key=idempotency_key,
                 )
+                subscription_link = xenet_config.sub_link
+                xenet_account_id = xenet_config.id
+                duration_seconds = service.months * 30 * 86400
+            else:
+                # Traffic-based service - use Panel API
+                duration_seconds = service.months * 30 * 86400
+                data_limit_bytes = int(service.traffic_gb * 1024**3)
+                # A prior request can succeed at the panel while its response is
+                # lost. On retry, reuse that account rather than creating another.
+                try:
+                    panel_user = await panel_client.get_user(service.panel_username)
+                except PanelAPIError as lookup_error:
+                    if lookup_error.status_code != 404:
+                        raise
+                    panel_user = await panel_client.create_active_user(
+                        username=service.panel_username,
+                        data_limit_bytes=data_limit_bytes,
+                        duration_seconds=duration_seconds,
+                    )
+                subscription_link = panel_user.subscription_link
+                xenet_account_id = None
         except Exception as exc:
             # Leave the receipt reviewable and the existing buttons usable.
             # The admin can correct the panel issue and approve again.
@@ -93,19 +109,20 @@ async def approve_order(callback: CallbackQuery):
         await update_service(
             service.id,
             status="active",
-            subscription_link=panel_user.subscription_link,
+            subscription_link=subscription_link,
             expires_at=expires_at,
+            xenet_account_id=xenet_account_id,
         )
         await update_order(order_id, status="approved", reviewed_at=datetime.now(timezone.utc))
         current_sold = int(await get_setting("sold_amount"))
         await set_setting("sold_amount", str(current_sold + int(order.amount)))
         current_traffic = int(float(await get_setting("sold_traffic")))
-        await set_setting("sold_traffic", str(current_traffic + float(service.traffic_gb)))
+        await set_setting("sold_traffic", str(current_traffic + float(service.traffic_gb if service.service_type == "traffic_based" else 0)))
         await callback.bot.send_message(order.telegram_id, t.ORDER_APPROVED_CUSTOMER)
-        if panel_user.subscription_link:
+        if subscription_link:
             from ...qr_gen import generate_qr_image
-            text = t.SERVICE_ACTIVATED_CUSTOMER.format(link=panel_user.subscription_link)
-            qr_photo = generate_qr_image(panel_user.subscription_link)
+            text = t.SERVICE_ACTIVATED_CUSTOMER.format(link=subscription_link)
+            qr_photo = generate_qr_image(subscription_link)
             await callback.bot.send_photo(order.telegram_id, qr_photo, caption=text)
         else:
             await callback.bot.send_message(
@@ -173,14 +190,19 @@ async def reject_order(callback: CallbackQuery):
     if order.type == "new_service" and order.service_id:
         service = await get_service(order.service_id)
         if service.status == "pending_payment":
-            # Panel user was never created (only happens on approval), so
-            # there's nothing to disable on the panel side.
+            # Account was never created (only happens on approval), so
+            # there's nothing to disable/delete on the provider side.
             await update_service(service.id, status="rejected")
         else:
             await update_service(service.id, status="disabled")
             try:
-                await panel_client.disable_user(service.panel_uuid or service.panel_username)
-            except PanelAPIError:
+                if service.service_type == "unlimited" and service.xenet_account_id:
+                    # For unlimited services, try to refund/delete on Xenet
+                    await xenet_client.refund_v2_account(service.xenet_account_id)
+                else:
+                    # For traffic-based services, disable on Panel
+                    await panel_client.disable_user(service.panel_uuid or service.panel_username)
+            except (PanelAPIError, XenetAPIError):
                 pass
 
     await callback.bot.send_message(order.telegram_id, t.ORDER_REJECTED_CUSTOMER)

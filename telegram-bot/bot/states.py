@@ -2,6 +2,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 
 class BuyService(StatesGroup):
+    choosing_service_type = State()
     choosing_plan = State()
     confirm = State()
     awaiting_receipt = State()
@@ -56,6 +57,7 @@ class AdminCards(StatesGroup):
 
 
 class AdminPlans(StatesGroup):
+    add_service_type = State()
     add_name = State()
     add_user_count = State()
     add_months = State()

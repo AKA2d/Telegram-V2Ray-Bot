@@ -1,4 +1,4 @@
-"""Periodic service expiry and traffic warnings."""
+"""Periodic service expiry, traffic warnings, and Xenet balance monitoring."""
 
 import asyncio
 import logging
@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 logger = logging.getLogger(__name__)
 
 CHECK_HOURS = [8, 12, 16]  # 8am, 12pm, 4pm
+XENET_BALANCE_WARNING_THRESHOLD = 100  # Warn when balance is below this amount
 
 
 async def _check_panel_traffic(bot):
@@ -48,6 +49,33 @@ async def _check_panel_traffic(bot):
         logger.exception("Failed to check panel traffic")
 
 
+async def _check_xenet_balance(bot):
+    """Check Xenet balance and notify admins if low."""
+    from .config import ADMIN_IDS, XENET_API_KEY
+    from .xenet_client import XenetAPIError, xenet_client
+
+    if not XENET_API_KEY:
+        return  # Skip if Xenet is not configured
+
+    try:
+        reseller = await xenet_client.get_balance()
+        balance = reseller.get("balance", 0)
+        if balance < XENET_BALANCE_WARNING_THRESHOLD:
+            text = (
+                f"⚠️ هشدار: موجودی Xenet رو به اتمام است!\n\n"
+                f"💰 موجودی فعلی: {balance:,} تومان\n"
+                f"📊 حداقل مورد نیاز: {XENET_BALANCE_WARNING_THRESHOLD:,} تومان\n\n"
+                f"لطفاً موجودی حساب Xenet خود را شارژ کنید."
+            )
+            for admin_id in ADMIN_IDS:
+                try:
+                    await bot.send_message(admin_id, text)
+                except Exception:
+                    logger.warning("Failed to send Xenet balance warning to admin %s", admin_id)
+    except XenetAPIError:
+        logger.exception("Failed to check Xenet balance")
+
+
 async def _check_services(bot):
     """Check all active services and send warnings."""
     from .db import async_session
@@ -74,6 +102,7 @@ async def _check_services(bot):
 async def _check_single_service(bot, service, now: datetime):
     """Check a single service and send warning if needed."""
     from .panel_client import PanelAPIError, panel_client
+    from .xenet_client import XenetAPIError, xenet_client
     from .services_repo import update_service
 
     # Check time
@@ -90,21 +119,34 @@ async def _check_single_service(bot, service, now: datetime):
             if total > 0 and remaining / total <= 0.1:
                 time_warning = True
 
-    # Check traffic
+    # Check traffic (only for traffic-based services)
     traffic_warning = False
     traffic_expired = False
-    try:
-        panel_user = await panel_client.get_user(service.panel_username)
-        bytes_used = panel_user.raw.get("usage") or panel_user.raw.get("data_usage") or panel_user.raw.get("used_traffic") or 0
-        total_bytes = float(service.traffic_gb) * 1024**3
-        if total_bytes > 0:
-            usage_ratio = bytes_used / total_bytes
-            if usage_ratio >= 1.0:
-                traffic_expired = True
-            elif usage_ratio >= 0.9:
-                traffic_warning = True
-    except PanelAPIError:
-        pass
+    if service.service_type != "unlimited":
+        try:
+            panel_user = await panel_client.get_user(service.panel_username)
+            bytes_used = panel_user.raw.get("usage") or panel_user.raw.get("data_usage") or panel_user.raw.get("used_traffic") or 0
+            total_bytes = float(service.traffic_gb) * 1024**3
+            if total_bytes > 0:
+                usage_ratio = bytes_used / total_bytes
+                if usage_ratio >= 1.0:
+                    traffic_expired = True
+                elif usage_ratio >= 0.9:
+                    traffic_warning = True
+        except PanelAPIError:
+            pass
+    else:
+        # For unlimited services, check Xenet account status
+        if service.xenet_account_id:
+            try:
+                xenet_config = await xenet_client.get_v2_account(service.xenet_account_id)
+                days_left = xenet_config.get("days_left", 30)
+                if days_left <= 0:
+                    time_expired = True
+                elif days_left <= 3:
+                    time_warning = True
+            except XenetAPIError:
+                pass
 
     # Send notification if needed
     if time_expired or traffic_expired:
@@ -118,9 +160,19 @@ async def _send_warning_message(bot, service, time_warning: bool, traffic_warnin
     lines = ["⚠️ هشدار: سرویس شما در حال اتمام است!\n"]
 
     if time_warning:
-        expires = service.expires_at if service.expires_at.tzinfo else service.expires_at.replace(tzinfo=timezone.utc)
-        remaining_days = (expires - datetime.now(timezone.utc)).days
-        lines.append(f"📅 زمان باقی‌مانده: {remaining_days} روز")
+        if service.service_type == "unlimited" and service.xenet_account_id:
+            # For unlimited services, show Xenet days left
+            try:
+                from .xenet_client import xenet_client
+                xenet_config = await xenet_client.get_v2_account(service.xenet_account_id)
+                days_left = xenet_config.get("days_left", 0)
+                lines.append(f"📅 زمان باقی‌مانده: {days_left} روز")
+            except Exception:
+                lines.append("📅 زمان باقی‌مانده: کمتر از ۳ روز")
+        else:
+            expires = service.expires_at if service.expires_at.tzinfo else service.expires_at.replace(tzinfo=timezone.utc)
+            remaining_days = (expires - datetime.now(timezone.utc)).days
+            lines.append(f"📅 زمان باقی‌مانده: {remaining_days} روز")
 
     if traffic_warning:
         try:
@@ -187,6 +239,12 @@ async def _scheduler_loop(bot):
             await _check_panel_traffic(bot)
         except Exception:
             logger.exception("Error during panel traffic check")
+
+        logger.info("Running Xenet balance check...")
+        try:
+            await _check_xenet_balance(bot)
+        except Exception:
+            logger.exception("Error during Xenet balance check")
 
         # Sleep a bit after check to avoid running twice in the same minute
         await asyncio.sleep(60)

@@ -40,9 +40,15 @@ def _add_missing_columns_sync(conn) -> None:
                 default_val = col.server_default.arg
                 if callable(default_val):
                     default_val = default_val()
+                # Quote string defaults for SQL safety
+                if isinstance(default_val, str) and not default_val.startswith(("(", "'")):
+                    default_val = f"'{default_val}'"
                 default = f" DEFAULT {default_val}"
             elif col.default is not None:
-                default = f" DEFAULT {col.default.arg}"
+                arg = col.default.arg
+                if isinstance(arg, str):
+                    arg = f"'{arg}'"
+                default = f" DEFAULT {arg}"
 
             sql = f'ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type} {nullable}{default}'
             logger.info("Adding missing column: %s", sql)

@@ -171,6 +171,15 @@ def admin_menu_keyboard(sales_closed: bool | None = None, tunnels_enabled: bool 
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
 
+def service_type_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=t.BTN_UNLIMITED_SERVICES, callback_data="service_type:unlimited")],
+            [InlineKeyboardButton(text=t.BTN_TRAFFIC_SERVICES, callback_data="service_type:traffic_based")],
+        ]
+    )
+
+
 def plans_list_keyboard(plans: list, is_wholesaler: bool = False) -> InlineKeyboardMarkup:
     rows = []
     for i, p in enumerate(plans, 1):
@@ -183,7 +192,10 @@ def format_plans_list(plans: list, is_wholesaler: bool = False, discount_percent
     for i, p in enumerate(plans, 1):
         original = base_plan_price(p, is_wholesaler)
         price = discounted_price(original, discount_percent)
-        lines.append(f"{i}. {safe_plan_name(p.name)} — {format_price(original, price)} تومان")
+        if p.service_type == "unlimited":
+            lines.append(f"{i}. {safe_plan_name(p.name)} ♾️ — {format_price(original, price)} تومان")
+        else:
+            lines.append(f"{i}. {safe_plan_name(p.name)} — {p.traffic_gb} گیگ — {format_price(original, price)} تومان")
     return "\n".join(lines)
 
 
@@ -233,8 +245,12 @@ def format_admin_plans_list(plans: list) -> str:
     lines = [t.PLANS_LIST_HEADER, ""]
     for i, p in enumerate(plans, 1):
         status = "✅" if p.is_active else "🚫"
+        type_icon = "♾️" if p.service_type == "unlimited" else "📊"
         wholesale_info = f" / عمده: {int(p.wholesale_price):,}" if p.wholesale_price else ""
-        lines.append(f"{i}. {status} {p.name} — {p.months} ماه / {p.traffic_gb} گیگ / {int(p.price):,} تومان{wholesale_info}")
+        if p.service_type == "unlimited":
+            lines.append(f"{i}. {status} {type_icon} {p.name} — {p.months} ماه / {int(p.price):,} تومان{wholesale_info}")
+        else:
+            lines.append(f"{i}. {status} {type_icon} {p.name} — {p.months} ماه / {p.traffic_gb} گیگ / {int(p.price):,} تومان{wholesale_info}")
     return "\n".join(lines)
 
 

@@ -8,11 +8,12 @@ from .db import async_session
 from .models import Plan
 
 
-async def list_active_plans() -> list[Plan]:
+async def list_active_plans(service_type: str | None = None) -> list[Plan]:
     async with async_session() as session:
-        result = await session.execute(
-            select(Plan).where(Plan.is_active == True).order_by(Plan.display_order)  # noqa: E712
-        )
+        query = select(Plan).where(Plan.is_active == True).order_by(Plan.display_order)  # noqa: E712
+        if service_type:
+            query = query.where(Plan.service_type == service_type)
+        result = await session.execute(query)
         return list(result.scalars().all())
 
 
@@ -27,12 +28,13 @@ async def get_plan(plan_id: int) -> Plan | None:
         return await session.get(Plan, plan_id)
 
 
-async def create_plan(name: str, user_count: int, months: int, traffic_gb: int, price: Decimal, wholesale_price: Decimal | None = None) -> Plan:
+async def create_plan(name: str, user_count: int, months: int, traffic_gb: int, price: Decimal, wholesale_price: Decimal | None = None, service_type: str = "traffic_based") -> Plan:
     async with async_session() as session:
         result = await session.execute(select(Plan))
         count = len(result.scalars().all())
         plan = Plan(
             name=name,
+            service_type=service_type,
             user_count=user_count,
             months=months,
             traffic_gb=traffic_gb,

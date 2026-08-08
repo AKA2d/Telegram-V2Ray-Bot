@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from ... import texts as t
-from ...keyboards import admin_plans_keyboard, format_admin_plans_list, plan_edit_field_keyboard
+from ...keyboards import admin_plans_keyboard, format_admin_plans_list, plan_edit_field_keyboard, service_type_keyboard
 from ...plans_repo import create_plan, get_plan, list_all_plans, remove_plan, toggle_plan_active, update_plan_field
 from ...states import AdminPlans
 from .base import AdminOnlyMiddleware
@@ -27,6 +27,15 @@ async def show_plans(message: Message):
 
 @router.callback_query(F.data == "plan_add")
 async def prompt_add_plan(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(AdminPlans.add_service_type)
+    await callback.message.answer("نوع سرویس را انتخاب کنید:", reply_markup=service_type_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(AdminPlans.add_service_type, F.data.startswith("service_type:"))
+async def set_plan_service_type(callback: CallbackQuery, state: FSMContext):
+    service_type = callback.data.split(":")[1]
+    await state.update_data(service_type=service_type)
     await state.set_state(AdminPlans.add_name)
     await callback.message.answer(t.ASK_PLAN_NAME)
     await callback.answer()
@@ -35,8 +44,18 @@ async def prompt_add_plan(callback: CallbackQuery, state: FSMContext):
 @router.message(AdminPlans.add_name)
 async def set_plan_name(message: Message, state: FSMContext):
     await state.update_data(name=message.text.strip())
-    await state.set_state(AdminPlans.add_user_count)
-    await message.answer(t.ASK_PLAN_USER_COUNT)
+    data = await state.get_data()
+    service_type = data.get("service_type", "traffic_based")
+    
+    if service_type == "unlimited":
+        # Unlimited plans: skip user_count (fixed at 1) and traffic_gb
+        await state.update_data(user_count=1, traffic_gb=0)
+        await state.set_state(AdminPlans.add_months)
+        await message.answer(t.ASK_PLAN_MONTHS)
+    else:
+        # Traffic-based plans: ask for user_count as usual
+        await state.set_state(AdminPlans.add_user_count)
+        await message.answer(t.ASK_PLAN_USER_COUNT)
 
 
 def _parse_positive_int(text: str) -> int | None:
@@ -65,8 +84,17 @@ async def set_plan_months(message: Message, state: FSMContext):
         await message.answer(t.INVALID_NUMBER)
         return
     await state.update_data(months=value)
-    await state.set_state(AdminPlans.add_traffic_gb)
-    await message.answer(t.ASK_PLAN_TRAFFIC)
+    data = await state.get_data()
+    service_type = data.get("service_type", "traffic_based")
+    
+    if service_type == "unlimited":
+        # Unlimited plans: skip traffic_gb, go directly to price
+        await state.set_state(AdminPlans.add_price)
+        await message.answer(t.ASK_PLAN_PRICE)
+    else:
+        # Traffic-based plans: ask for traffic_gb
+        await state.set_state(AdminPlans.add_traffic_gb)
+        await message.answer(t.ASK_PLAN_TRAFFIC)
 
 
 @router.message(AdminPlans.add_traffic_gb)
@@ -107,6 +135,7 @@ async def set_plan_wholesale_price(message: Message, state: FSMContext):
     data = await state.get_data()
     await create_plan(
         name=data["name"],
+        service_type=data.get("service_type", "traffic_based"),
         user_count=data["user_count"],
         months=data["months"],
         traffic_gb=data["traffic_gb"],

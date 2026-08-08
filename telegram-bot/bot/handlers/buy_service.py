@@ -1,4 +1,5 @@
 import logging
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -19,10 +20,12 @@ from ..keyboards import (
     payment_keyboard,
     plan_confirm_keyboard,
     plans_list_keyboard,
+    service_type_keyboard,
 )
 from ..models import User
 from ..orders_repo import create_order, update_order
 from ..panel_client import PanelAPIError, panel_client
+from ..xenet_client import XenetAPIError, xenet_client
 from ..plans_repo import get_plan, list_active_plans
 from ..pricing import format_price, plan_price_quote, safe_plan_name
 from ..services_repo import create_service, update_service
@@ -61,21 +64,37 @@ async def start_buy(message: Message, state: FSMContext):
                 if not user or user.wallet_balance <= 0:
                     await message.answer(t.SALES_CLOSEDMsg, reply_markup=main_menu(is_admin(user_id)))
                     return
+    
+    await state.set_state(BuyService.choosing_service_type)
+    await message.answer(
+        t.CHOOSE_SERVICE_TYPE,
+        reply_markup=service_type_keyboard(),
+    )
+
+
+@router.callback_query(BuyService.choosing_service_type, F.data.startswith("service_type:"))
+async def choose_service_type(callback: CallbackQuery, state: FSMContext):
+    service_type = callback.data.split(":")[1]
+    await state.update_data(service_type=service_type)
+    
+    user_id = callback.from_user.id
     is_wl = await is_wholesaler(user_id)
     from ..pricing import get_discount_percent
     discount_percent = await get_discount_percent(is_wl)
-    plans = await list_active_plans()
+    
+    plans = await list_active_plans(service_type=service_type)
     if not plans:
-        await message.answer(t.NO_PLANS_AVAILABLE, reply_markup=main_menu(is_admin(message.from_user.id)))
+        await callback.answer(t.NO_PLANS_AVAILABLE, show_alert=True)
         return
+    
     keyboard = plans_list_keyboard(plans, is_wholesaler=is_wl)
-
     await state.set_state(BuyService.choosing_plan)
-    await message.answer(
+    await callback.message.edit_text(
         format_plans_list(plans, is_wholesaler=is_wl, discount_percent=discount_percent),
         reply_markup=keyboard,
         parse_mode=ParseMode.HTML,
     )
+    await callback.answer()
 
 
 @router.callback_query(BuyService.choosing_plan, F.data.startswith("plan_select:"))
@@ -89,6 +108,8 @@ async def ask_confirm(callback: CallbackQuery, state: FSMContext):
     is_wl = await is_wholesaler(callback.from_user.id)
     original_price, effective_price, _ = await plan_price_quote(plan, is_wl)
 
+    traffic_text = "نامحدود" if plan.service_type == "unlimited" else f"{plan.traffic_gb} گیگابایت"
+
     await state.update_data(
         plan_type=plan_type,
         plan_id=plan.id,
@@ -100,7 +121,7 @@ async def ask_confirm(callback: CallbackQuery, state: FSMContext):
         t.ORDER_SUMMARY.format(
             plan_name=safe_plan_name(plan.name),
             months=plan.months,
-            traffic_gb=plan.traffic_gb,
+            traffic_gb=traffic_text,
             price=format_price(original_price, effective_price),
         ),
         reply_markup=plan_confirm_keyboard(plan_type, plan.id),
@@ -149,13 +170,14 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
     panel_username = _gen_panel_username(telegram_id)
     service = await create_service(
         owner_telegram_id=telegram_id,
+        service_type=plan.service_type,
         panel_username=panel_username,
         panel_uuid=None,
         subscription_link=None,
         status="pending_payment",
         user_count=plan.user_count,
         months=plan.months,
-        traffic_gb=plan.traffic_gb,
+        traffic_gb=plan.traffic_gb if plan.service_type == "traffic_based" else 0,
         price=effective_price,
         expires_at=None,
     )
@@ -201,14 +223,28 @@ async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan, eff
         return
 
     try:
-        panel_user = await panel_client.create_active_user(
-            username=panel_username,
-            data_limit_bytes=data_limit_bytes,
-            duration_seconds=duration_seconds,
-        )
+        if plan.service_type == "unlimited":
+            # Create unlimited service via Xenet API
+            idempotency_key = f"order_{telegram_id}_{int(time.time())}"
+            xenet_config = await xenet_client.create_v2_account(
+                users=plan.user_count,
+                idempotency_key=idempotency_key,
+            )
+            subscription_link = xenet_config.sub_link
+            xenet_account_id = xenet_config.id
+            panel_user = None
+        else:
+            # Create traffic-based service via PasarGuard API
+            panel_user = await panel_client.create_active_user(
+                username=panel_username,
+                data_limit_bytes=data_limit_bytes,
+                duration_seconds=duration_seconds,
+            )
+            subscription_link = panel_user.subscription_link
+            xenet_account_id = None
     except Exception as exc:
-        await credit_wallet(telegram_id, effective_price, f"refund: panel error for plan '{plan.name}'")
-        logger.exception("Panel error while creating user (wallet payment)")
+        await credit_wallet(telegram_id, effective_price, f"refund: API error for plan '{plan.name}'")
+        logger.exception("API error while creating user (wallet payment)")
         for admin_id in ADMIN_IDS:
             await callback.bot.send_message(admin_id, t.PANEL_ERROR_ADMIN.format(error=str(exc)))
         await callback.message.answer(t.ERROR_GENERIC, reply_markup=main_menu(is_admin(telegram_id)))
@@ -220,15 +256,17 @@ async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan, eff
 
     service = await create_service(
         owner_telegram_id=telegram_id,
-        panel_username=panel_user.username,
-        panel_uuid=panel_user.uuid,
-        subscription_link=panel_user.subscription_link,
+        service_type=plan.service_type,
+        panel_username=panel_user.username if panel_user else panel_username,
+        panel_uuid=panel_user.uuid if panel_user else None,
+        subscription_link=subscription_link,
         status="active",
         user_count=plan.user_count,
         months=plan.months,
-        traffic_gb=plan.traffic_gb,
+        traffic_gb=plan.traffic_gb if plan.service_type == "traffic_based" else 0,
         price=effective_price,
         expires_at=expires_at,
+        xenet_account_id=xenet_account_id,
     )
 
     await create_order(
@@ -243,9 +281,9 @@ async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan, eff
 
     from ..qr_gen import generate_qr_image
 
-    text = t.WALLET_PAYMENT_SUCCESS.format(link=panel_user.subscription_link or "—")
-    if panel_user.subscription_link:
-        qr_photo = generate_qr_image(panel_user.subscription_link)
+    text = t.WALLET_PAYMENT_SUCCESS.format(link=subscription_link or "—")
+    if subscription_link:
+        qr_photo = generate_qr_image(subscription_link)
         await callback.message.answer_photo(qr_photo, caption=text)
     else:
         await callback.message.answer(text, reply_markup=main_menu(is_admin(telegram_id)))

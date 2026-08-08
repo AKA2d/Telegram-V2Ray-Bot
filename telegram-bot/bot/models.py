@@ -36,6 +36,7 @@ class Service(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     owner_telegram_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.telegram_id"))
+    service_type: Mapped[str] = mapped_column(String(32), default="traffic_based")  # 'traffic_based' or 'unlimited'
     panel_username: Mapped[str] = mapped_column(String(255), unique=True)
     panel_uuid: Mapped[str | None] = mapped_column(String(255), nullable=True)
     subscription_link: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -45,6 +46,7 @@ class Service(Base):
     traffic_gb: Mapped[float] = mapped_column(Numeric(10, 2), default=10)
     price: Mapped[Decimal] = mapped_column(Numeric(14, 0), default=0)
     has_tunnel: Mapped[bool] = mapped_column(Boolean, default=False)
+    xenet_account_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # For unlimited services
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -88,6 +90,7 @@ class Plan(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255))
+    service_type: Mapped[str] = mapped_column(String(32), default="traffic_based")  # 'traffic_based' or 'unlimited'
     user_count: Mapped[int] = mapped_column(Integer, default=1)
     months: Mapped[int] = mapped_column(Integer, default=1)
     traffic_gb: Mapped[float] = mapped_column(Numeric(10, 2), default=10)
