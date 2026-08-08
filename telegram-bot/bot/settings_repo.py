@@ -12,6 +12,9 @@ DEFAULTS: dict[str, str] = {
     "test_traffic_gb": "1",
     "test_days": "1",
     "test_enabled": "1",
+    "test_provider": "panel",  # 'panel' or 'xenet'
+    "test_xenet_traffic_gb": "1",
+    "test_xenet_days": "1",
     "wholesaler_fee": "1000000",
     "user_discount_percent": "0",
     "wholesaler_discount_percent": "0",

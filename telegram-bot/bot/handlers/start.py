@@ -12,6 +12,7 @@ from ..config import is_admin, REQUIRED_CHANNEL_ID
 from ..keyboards import join_channel_keyboard, main_menu, SUPPORT_USERNAME
 from ..membership import is_channel_member
 from ..panel_client import PanelAPIError, panel_client
+from ..xenet_client import XenetAPIError, xenet_client
 from ..services_repo import create_service
 from ..test_repo import get_test_settings, has_used_test, mark_test_used
 from ..users_repo import get_or_create_user
@@ -144,40 +145,80 @@ async def get_test_service(message: Message):
         await message.answer(t.TEST_ALREADY_USED, reply_markup=main_menu(is_user_admin))
         return
 
-    panel_username = f"test_{user_id}_{uuid.uuid4().hex[:6]}"
-    data_limit_bytes = int(test_settings["traffic_gb"] * 1024**3)
-    duration_seconds = test_settings["days"] * 86400
+    provider = test_settings["provider"]
 
-    try:
-        panel_user = await panel_client.create_active_user(
-            username=panel_username,
-            data_limit_bytes=data_limit_bytes,
-            duration_seconds=duration_seconds,
+    if provider == "xenet":
+        # Create test service using Xenet API
+        try:
+            xenet_config = await xenet_client.create_v2_account(
+                users=1,
+                idempotency_key=f"test_{user_id}_{int(time.time())}",
+            )
+            subscription_link = xenet_config.sub_link
+            xenet_account_id = xenet_config.id
+            panel_username = xenet_config.name
+        except XenetAPIError as exc:
+            await message.answer(t.ERROR_GENERIC, reply_markup=main_menu(is_user_admin))
+            return
+
+        # Xenet test services use custom settings from admin
+        traffic_gb = test_settings["xenet_traffic_gb"]
+        days = test_settings["xenet_days"]
+        duration_seconds = days * 86400
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)
+
+        await create_service(
+            owner_telegram_id=user_id,
+            service_type="unlimited",
+            panel_username=panel_username,
+            panel_uuid=None,
+            subscription_link=subscription_link,
+            status="active",
+            user_count=1,
+            months=days,
+            traffic_gb=traffic_gb,
+            price=0,
+            expires_at=expires_at,
+            xenet_account_id=xenet_account_id,
         )
-    except PanelAPIError as exc:
-        await message.answer(t.ERROR_GENERIC, reply_markup=main_menu(is_user_admin))
-        return
+    else:
+        # Create test service using PasarGuard panel
+        panel_username = f"test_{user_id}_{uuid.uuid4().hex[:6]}"
+        data_limit_bytes = int(test_settings["traffic_gb"] * 1024**3)
+        duration_seconds = test_settings["days"] * 86400
 
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)
-    await create_service(
-        owner_telegram_id=user_id,
-        panel_username=panel_user.username,
-        panel_uuid=panel_user.uuid,
-        subscription_link=panel_user.subscription_link,
-        status="active",
-        user_count=1,
-        months=test_settings["days"],
-        traffic_gb=test_settings["traffic_gb"],
-        price=0,
-        expires_at=expires_at,
-    )
+        try:
+            panel_user = await panel_client.create_active_user(
+                username=panel_username,
+                data_limit_bytes=data_limit_bytes,
+                duration_seconds=duration_seconds,
+            )
+        except PanelAPIError as exc:
+            await message.answer(t.ERROR_GENERIC, reply_markup=main_menu(is_user_admin))
+            return
+
+        subscription_link = panel_user.subscription_link
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)
+        await create_service(
+            owner_telegram_id=user_id,
+            service_type="traffic_based",
+            panel_username=panel_user.username,
+            panel_uuid=panel_user.uuid,
+            subscription_link=subscription_link,
+            status="active",
+            user_count=1,
+            months=test_settings["days"],
+            traffic_gb=test_settings["traffic_gb"],
+            price=0,
+            expires_at=expires_at,
+        )
 
     await mark_test_used(user_id)
 
     from ..qr_gen import generate_qr_image
-    text = t.TEST_ACTIVATED.format(link=panel_user.subscription_link or "—")
-    if panel_user.subscription_link:
-        qr_photo = generate_qr_image(panel_user.subscription_link)
+    text = t.TEST_ACTIVATED.format(link=subscription_link or "—")
+    if subscription_link:
+        qr_photo = generate_qr_image(subscription_link)
         await message.answer_photo(qr_photo, caption=text, reply_markup=main_menu(is_user_admin))
     else:
         await message.answer(text, reply_markup=main_menu(is_user_admin))

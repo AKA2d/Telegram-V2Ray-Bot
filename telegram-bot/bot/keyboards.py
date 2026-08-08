@@ -87,13 +87,17 @@ def services_list_keyboard(services: list) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def admin_test_keyboard(test_enabled: bool) -> InlineKeyboardMarkup:
+def admin_test_keyboard(test_enabled: bool, provider: str = "panel") -> InlineKeyboardMarkup:
     status = "فعال" if test_enabled else "غیرفعال"
+    provider_name = "پنل" if provider == "panel" else "Xenet"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=f"وضعیت: {status}", callback_data="test_toggle")],
-            [InlineKeyboardButton(text="⏱ تغییر مدت", callback_data="test_edit_days")],
-            [InlineKeyboardButton(text="🌐 تغییر ترافیک", callback_data="test_edit_traffic")],
+            [InlineKeyboardButton(text=f"ارائه‌دهنده: {provider_name}", callback_data="test_toggle_provider")],
+            [InlineKeyboardButton(text="⏱ تغییر مدت (پنل)", callback_data="test_edit_days")],
+            [InlineKeyboardButton(text="🌐 تغییر ترافیک (پنل)", callback_data="test_edit_traffic")],
+            [InlineKeyboardButton(text="⏱ تغییر مدت (Xenet)", callback_data="test_edit_xenet_days")],
+            [InlineKeyboardButton(text="🌐 تغییر ترافیک (Xenet)", callback_data="test_edit_xenet_traffic")],
             [InlineKeyboardButton(text="🗑 پاک کردن لیست کاربران", callback_data="test_clear_users")],
             [InlineKeyboardButton(text=t.BTN_BACK, callback_data="cust_back")],
         ]
