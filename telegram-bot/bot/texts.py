@@ -61,11 +61,11 @@ WALLET_PAYMENT_SUCCESS = (
 ORDER_SUMMARY = (
     "خلاصه سفارش شما:\n\n"
     "📦 پلن: {plan_name}\n"
-    "🧑‍🤝‍🧑 تعداد کاربر: نامحدود\n"
+    "🧑‍🤝‍🧑 تعداد کاربر: {user_count}\n"
     "📅 مدت: {months} ماه\n"
     "🌐 ترافیک: {traffic_gb}\n"
     "💰 مبلغ قابل پرداخت: {price} تومان\n\n"
-    "آیا سفارش را تایید می‌کنید？"
+    "آیا سفارش را تایید می‌کنید؟"
 )
 
 PAYMENT_INSTRUCTIONS = (
@@ -104,7 +104,7 @@ SERVICE_NOT_FOUND = "سرویسی با این مشخصات پیدا نشد."
 SERVICE_DETAIL = (
     "📦 سرویس #{id}\n"
     "نام: {panel_username}\n"
-    "پلن: {months} ماه / نامحدود کاربر / {traffic_gb} گیگ\n"
+    "پلن: {months} ماه / {user_count} کاربر / {traffic_gb} گیگ\n"
     "وضعیت: {status}\n"
     "مدت باقی‌مانده: {remaining_days} \n"
     "ترافیک باقی‌مانده: {remaining_traffic}\n"
@@ -232,7 +232,7 @@ ASK_PLAN_WHOLESALE_PRICE = "قیمت عمده‌فروشی این پلن را ب
 PLAN_ADDED = "پلن با موفقیت اضافه شد."
 PLAN_REMOVED = "پلن حذف شد."
 PLAN_TOGGLED = "وضعیت پلن تغییر کرد."
-PLAN_EDIT_CHOOSE_FIELD = "کدام فیلد پلن «{name}» را می‌خواهید تغییر دهید؟"
+PLAN_EDIT_CHOOSE_FIELD = "کدام فلد پلن «{name}» را می‌خواهید تغییر دهید؟"
 PLAN_FIELD_UPDATED = "فیلد با موفقیت به‌روزرسانی شد."
 PLAN_EDIT_NAME = "نام جدید پلن را وارد کنید:"
 PLAN_EDIT_USER_COUNT = "تعداد کاربر جدید را وارد کنید:"
@@ -258,7 +258,7 @@ CUSTOMER_NO_SERVICES = "این مشتری هیچ سرویسی ندارد."
 CUSTOMER_SERVICE_DETAIL = (
     "📦 سرویس #{id}\n"
     "پنل یوزرنیم: {panel_username}\n"
-    "پلن: {months} ماه / نامحدود کاربر / {traffic_gb} گیگ\n"
+    "پلن: {months} ماه / {user_count} کاربر / {traffic_gb} گیگ\n"
     "وضعیت: {status}\n"
     "مدت باقی‌مانده: {remaining_days} \n"
     "ترافیک باقی‌مانده: {remaining_traffic}\n"
@@ -273,7 +273,7 @@ CUSTOMER_WALLET_ADJUSTED = "موجودی کیف پول مشتری از {old} ب�
 ASK_WALLET_ADJUST_AMOUNT = "مبلغ را به تومان وارد کنید (مثبت برای افزایش، منفی برای کاهش):"
 
 ASK_WALLET_NEW_BALANCE = "موجودی جدید کیف پول این کاربر را به تومان وارد کنید:"
-CONFIRM_WALLET_CHANGE = "آیا مطمئن هستید که می‌خواهید موجودی کاربر {telegram_id} را از {old} به {new} تومان تغییر دهید؟"
+CONFIRM_WALLET_CHANGE = "آیا مطمئن هستید که می‌خواهید موجودی کاربر {telegram_id} را از {old} به {new} تومان تغییر دهید?"
 WALLET_CHANGE_DONE = "موجودی کیف پول با موفقیت تغییر کرد."
 WALLET_NEGATIVE_ERROR = "موجودی کیف پول نمی‌تواند منفی باشد."
 

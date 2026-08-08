@@ -80,11 +80,13 @@ async def _format_service(service) -> str:
 
     # Add service type indicator
     type_indicator = "♾️ نامحدود" if service.service_type == "unlimited" else "📊 ترافیکی"
+    user_count_text = "1" if service.service_type == "unlimited" else "نامحدود"
 
     return t.SERVICE_DETAIL.format(
         id=service.id,
         panel_username=f"{service.panel_username} ({type_indicator})",
         months=service.months,
+        user_count=user_count_text,
         traffic_gb=service.traffic_gb,
         status=service.status,
         remaining_days=remaining_days,

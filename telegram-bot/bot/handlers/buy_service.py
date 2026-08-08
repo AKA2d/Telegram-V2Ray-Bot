@@ -109,6 +109,7 @@ async def ask_confirm(callback: CallbackQuery, state: FSMContext):
     original_price, effective_price, _ = await plan_price_quote(plan, is_wl)
 
     traffic_text = "نامحدود" if plan.service_type == "unlimited" else f"{plan.traffic_gb} گیگابایت"
+    user_count_text = "1" if plan.service_type == "unlimited" else "نامحدود"
 
     await state.update_data(
         plan_type=plan_type,
@@ -122,6 +123,7 @@ async def ask_confirm(callback: CallbackQuery, state: FSMContext):
             plan_name=safe_plan_name(plan.name),
             months=plan.months,
             traffic_gb=traffic_text,
+            user_count=user_count_text,
             price=format_price(original_price, effective_price),
         ),
         reply_markup=plan_confirm_keyboard(plan_type, plan.id),
@@ -233,6 +235,8 @@ async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan, eff
             subscription_link = xenet_config.sub_link
             xenet_account_id = xenet_config.id
             panel_user = None
+            # Use the name returned by Xenet API as panel_username
+            panel_username = xenet_config.name
         else:
             # Create traffic-based service via PasarGuard API
             panel_user = await panel_client.create_active_user(

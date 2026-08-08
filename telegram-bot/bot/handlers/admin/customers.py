@@ -140,11 +140,13 @@ async def view_customer_service(callback: CallbackQuery, state: FSMContext = Non
 
     # Add service type indicator
     type_indicator = "♾️ نامحدود" if service.service_type == "unlimited" else "📊 ترافیکی"
+    user_count_text = "1" if service.service_type == "unlimited" else "نامحدود"
 
     text = t.CUSTOMER_SERVICE_DETAIL.format(
         id=service.id,
         panel_username=f"{service.panel_username} ({type_indicator})",
         months=service.months,
+        user_count=user_count_text,
         traffic_gb=service.traffic_gb,
         status=service.status,
         remaining_days=remaining_days,
@@ -418,7 +420,8 @@ async def add_service_confirm(callback: CallbackQuery, state: FSMContext):
             )
             subscription_link = xenet_config.sub_link
             xenet_account_id = xenet_config.id
-            panel_username = f"tg{telegram_id}_{uuid.uuid4().hex[:6]}"
+            # Use the name returned by Xenet API as panel_username
+            panel_username = xenet_config.name
         except XenetAPIError as exc:
             logger.exception("Failed to create Xenet account for customer %s", telegram_id)
             await callback.answer(f"خطا در Xenet: {exc}", show_alert=True)

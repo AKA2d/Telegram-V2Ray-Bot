@@ -106,13 +106,16 @@ async def approve_order(callback: CallbackQuery):
             return
 
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=service.months * 30 * 86400)
-        await update_service(
-            service.id,
-            status="active",
-            subscription_link=subscription_link,
-            expires_at=expires_at,
-            xenet_account_id=xenet_account_id,
-        )
+        update_fields = {
+            "status": "active",
+            "subscription_link": subscription_link,
+            "expires_at": expires_at,
+            "xenet_account_id": xenet_account_id,
+        }
+        # For unlimited services, use the name from Xenet API as panel_username
+        if service.service_type == "unlimited":
+            update_fields["panel_username"] = xenet_config.name
+        await update_service(service.id, **update_fields)
         await update_order(order_id, status="approved", reviewed_at=datetime.now(timezone.utc))
         current_sold = int(await get_setting("sold_amount"))
         await set_setting("sold_amount", str(current_sold + int(order.amount)))
