@@ -90,12 +90,17 @@ async def _check_xenet_balance(bot):
         logger.exception("Failed to check Xenet balance")
 
 
-async def _check_services(bot):
+async def _check_services(bot, *, dry_run: bool = False):
     """Check all active services and send consolidated warnings per user.
 
     Instead of sending one message per service, services are grouped by
     owner and a single message is sent per user listing all their services
     that need attention.
+
+    When *dry_run* is ``True`` the evaluation and sending still happen, but
+    the dedup timestamps (``last_warning_sent_at`` / ``last_expired_sent_at``)
+    are **not** written to the database so that real notifications are not
+    suppressed afterwards.
     """
     from collections import defaultdict
 
@@ -129,12 +134,13 @@ async def _check_services(bot):
         try:
             await _send_user_notification(bot, owner_id, entries)
             # Record timestamps for every service that was included
-            now_ts = datetime.now(timezone.utc)
-            for eval_result, service in entries:
-                if eval_result.is_expired:
-                    await update_service(service.id, last_expired_sent_at=now_ts)
-                else:
-                    await update_service(service.id, last_warning_sent_at=now_ts)
+            if not dry_run:
+                now_ts = datetime.now(timezone.utc)
+                for eval_result, service in entries:
+                    if eval_result.is_expired:
+                        await update_service(service.id, last_expired_sent_at=now_ts)
+                    else:
+                        await update_service(service.id, last_warning_sent_at=now_ts)
         except Exception:
             logger.exception("Error sending consolidated notification to user %s", owner_id)
 
