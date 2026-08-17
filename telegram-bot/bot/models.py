@@ -47,6 +47,8 @@ class Service(Base):
     price: Mapped[Decimal] = mapped_column(Numeric(14, 0), default=0)
     has_tunnel: Mapped[bool] = mapped_column(Boolean, default=False)
     xenet_account_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # For unlimited services
+    last_warning_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_expired_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

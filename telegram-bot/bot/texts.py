@@ -308,3 +308,20 @@ POST_PURCHASE_HINT = (
     "📱 برای راهنمای اتصال، از منوی «روش اتصال» استفاده کنید.\n"
     "💬 برای پشتیبانی، عضو کانال شوید:\nhttps://t.me/+dYqOrcFbKpowOGFh"
 )
+
+# ---- Notification settings ------------------------------------------------
+ADMIN_MENU_NOTIFY = "🔔 تنظیمات اعلان‌ها"
+
+NOTIFY_SETTINGS_HEADER = (
+    "🔔 تنظیمات اعلان‌های کاربران\n\n"
+    "هر نوع اعلان را به صورت جداگانه فعال یا غیرفعال کنید:"
+)
+NOTIFY_TIME_WARNING_ON = "⏰ هشدار اتمام زمان: فعال ✅"
+NOTIFY_TIME_WARNING_OFF = "⏰ هشدار اتمام زمان: غیرفعال ❌"
+NOTIFY_TIME_EXPIRED_ON = "⛔ اتمام زمان سرویس: فعال ✅"
+NOTIFY_TIME_EXPIRED_OFF = "⛔ اتمام زمان سرویس: غیرفعال ❌"
+NOTIFY_TRAFFIC_WARNING_ON = "📊 هشدار اتمام ترافیک: فعال ✅"
+NOTIFY_TRAFFIC_WARNING_OFF = "📊 هشدار اتمام ترافیک: غیرفعال ❌"
+NOTIFY_TRAFFIC_EXPIRED_ON = "🚫 اتمام ترافیک سرویس: فعال ✅"
+NOTIFY_TRAFFIC_EXPIRED_OFF = "🚫 اتمام ترافیک سرویس: غیرفعال ❌"
+NOTIFY_TOGGLE_DONE = "تنظیمات اعلان‌ها به‌روزرسانی شد."

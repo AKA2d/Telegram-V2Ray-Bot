@@ -139,14 +139,6 @@ async def show_wholesaler_detail(callback: CallbackQuery):
     await callback.answer()
 
 
-@router.message(F.text)
-async def handle_wholesaler_state_text(message: Message, state: FSMContext):
-    current_state = await state.get_state()
-    if current_state is None:
-        return
-    if current_state == AdminWholesalers.add_wholesaler.state:
-        await set_wholesaler_id(message, state)
-        return
-    if current_state == AdminWholesalers.remove_wholesaler.state:
-        await remove_wholesaler_by_id(message, state)
-        return
+# NOTE: The original catch-all handler was removed because it consumed all
+# text messages while in non-wholesaler states, preventing other handlers
+# from processing them. The state-filtered handlers above are sufficient.

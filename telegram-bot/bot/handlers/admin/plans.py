@@ -150,6 +150,25 @@ async def set_plan_wholesale_price(message: Message, state: FSMContext):
 @router.callback_query(F.data.startswith("plan_toggle:"))
 async def toggle_plan(callback: CallbackQuery):
     plan_id = int(callback.data.split(":")[1])
+    plan = await get_plan(plan_id)
+    if not plan:
+        await callback.answer(t.PLAN_NOT_FOUND, show_alert=True)
+        return
+    from ...keyboards import InlineKeyboardButton, InlineKeyboardMarkup
+    new_status = "غیرفعال" if plan.is_active else "فعال"
+    await callback.message.edit_text(
+        f"آیا مطمئن هستید که می‌خواهید وضعیت پلن «{plan.name}» را به {new_status} تغییر دهید?",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t.CONFIRM_YES, callback_data=f"plan_toggle_confirm:{plan_id}")],
+            [InlineKeyboardButton(text=t.CONFIRM_NO, callback_data="plan_edit_cancel")],
+        ]),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("plan_toggle_confirm:"))
+async def confirm_toggle_plan(callback: CallbackQuery):
+    plan_id = int(callback.data.split(":")[1])
     await toggle_plan_active(plan_id)
     plans = await list_all_plans()
     await callback.message.edit_text(format_admin_plans_list(plans), reply_markup=admin_plans_keyboard(plans))
@@ -158,6 +177,24 @@ async def toggle_plan(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("plan_remove:"))
 async def remove_plan_cb(callback: CallbackQuery):
+    plan_id = int(callback.data.split(":")[1])
+    plan = await get_plan(plan_id)
+    if not plan:
+        await callback.answer(t.PLAN_NOT_FOUND, show_alert=True)
+        return
+    from ...keyboards import InlineKeyboardButton, InlineKeyboardMarkup
+    await callback.message.edit_text(
+        f"⚠️ آیا مطمئن هستید که می‌خواهید پلن «{plan.name}» را حذف کنید?\n\nاین عمل غیرقابل بازگشت است.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t.CONFIRM_YES, callback_data=f"plan_remove_confirm:{plan_id}")],
+            [InlineKeyboardButton(text=t.CONFIRM_NO, callback_data="plan_edit_cancel")],
+        ]),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("plan_remove_confirm:"))
+async def confirm_remove_plan(callback: CallbackQuery):
     plan_id = int(callback.data.split(":")[1])
     await remove_plan(plan_id)
     plans = await list_all_plans()

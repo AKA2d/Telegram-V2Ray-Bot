@@ -17,6 +17,7 @@ from ..keyboards import (
     plans_list_keyboard,
     service_actions_keyboard,
     services_list_keyboard,
+    svc_confirm_keyboard,
 )
 from ..panel_client import PanelAPIError, panel_client
 from ..xenet_client import XenetAPIError, xenet_client
@@ -186,18 +187,10 @@ async def disable_service(callback: CallbackQuery):
     if service.status != "active":
         await callback.answer("سرویس در حال حاضر فعال نیست.", show_alert=True)
         return
-    try:
-        if service.service_type == "unlimited" and service.xenet_account_id:
-            # Unlimited service - toggle on Xenet
-            await xenet_client.toggle_v2_account(service.xenet_account_id)
-        else:
-            # Traffic-based service - disable on Panel
-            await panel_client.disable_user(service.panel_username)
-    except (PanelAPIError, XenetAPIError):
-        await callback.answer(t.ERROR_GENERIC, show_alert=True)
-        return
-    await update_service(service_id, status="disabled")
-    await callback.message.edit_text("سرویس با موفقیت غیرفعال شد.")
+    await callback.message.edit_text(
+        f"⚠️ آیا مطمئن هستید که می‌خواهید سرویس #{service_id} را غیرفعال کنید?",
+        reply_markup=svc_confirm_keyboard("disable", service_id),
+    )
     await callback.answer()
 
 
@@ -211,18 +204,10 @@ async def enable_service(callback: CallbackQuery):
     if service.status == "active":
         await callback.answer("سرویس در حال حاضر فعال است.", show_alert=True)
         return
-    try:
-        if service.service_type == "unlimited" and service.xenet_account_id:
-            # Unlimited service - toggle on Xenet
-            await xenet_client.toggle_v2_account(service.xenet_account_id)
-        else:
-            # Traffic-based service - enable on Panel
-            await panel_client.enable_user(service.panel_username)
-    except (PanelAPIError, XenetAPIError):
-        await callback.answer(t.ERROR_GENERIC, show_alert=True)
-        return
-    await update_service(service_id, status="active")
-    await callback.message.edit_text("سرویس با موفقیت فعال شد.")
+    await callback.message.edit_text(
+        f"⚠️ آیا مطمئن هستید که می‌خواهید سرویس #{service_id} را فعال کنید?",
+        reply_markup=svc_confirm_keyboard("enable", service_id),
+    )
     await callback.answer()
 
 
@@ -233,18 +218,65 @@ async def delete_service(callback: CallbackQuery):
     if not service or not _can_manage(service, callback.from_user.id):
         await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
         return
-    try:
-        if service.service_type == "unlimited" and service.xenet_account_id:
-            # Unlimited service - refund on Xenet
-            await xenet_client.refund_v2_account(service.xenet_account_id)
-        else:
-            # Traffic-based service - delete on Panel
-            await panel_client.delete_user(service.panel_username)
-    except (PanelAPIError, XenetAPIError):
-        await callback.answer(t.ERROR_GENERIC, show_alert=True)
+    await callback.message.edit_text(
+        f"⚠️ آیا مطمئن هستید که می‌خواهید سرویس #{service_id} را از پنل حذف کنید?\n\nاین عمل غیرقابل بازگشت است.",
+        reply_markup=svc_confirm_keyboard("delete", service_id),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("svc_confirm:"))
+async def confirm_service_action(callback: CallbackQuery):
+    """Handle confirmed service disable/enable/delete actions."""
+    _, action, service_id_str = callback.data.split(":")
+    service_id = int(service_id_str)
+    service = await get_service(service_id)
+    if not service or not _can_manage(service, callback.from_user.id):
+        await callback.answer(t.SERVICE_NOT_FOUND, show_alert=True)
         return
-    await update_service(service_id, status="deleted")
-    await callback.message.edit_text("سرویس با موفقیت از پنل حذف شد.")
+
+    if action == "disable":
+        if service.status != "active":
+            await callback.answer("سرویس در حال حاضر فعال نیست.", show_alert=True)
+            return
+        try:
+            if service.service_type == "unlimited" and service.xenet_account_id:
+                await xenet_client.toggle_v2_account(service.xenet_account_id)
+            else:
+                await panel_client.disable_user(service.panel_username)
+        except (PanelAPIError, XenetAPIError):
+            await callback.answer(t.ERROR_GENERIC, show_alert=True)
+            return
+        await update_service(service_id, status="disabled")
+        await callback.message.edit_text("سرویس با موفقیت غیرفعال شد.")
+
+    elif action == "enable":
+        if service.status == "active":
+            await callback.answer("سرویس در حال حاضر فعال است.", show_alert=True)
+            return
+        try:
+            if service.service_type == "unlimited" and service.xenet_account_id:
+                await xenet_client.toggle_v2_account(service.xenet_account_id)
+            else:
+                await panel_client.enable_user(service.panel_username)
+        except (PanelAPIError, XenetAPIError):
+            await callback.answer(t.ERROR_GENERIC, show_alert=True)
+            return
+        await update_service(service_id, status="active")
+        await callback.message.edit_text("سرویس با موفقیت فعال شد.")
+
+    elif action == "delete":
+        try:
+            if service.service_type == "unlimited" and service.xenet_account_id:
+                await xenet_client.refund_v2_account(service.xenet_account_id)
+            else:
+                await panel_client.delete_user(service.panel_username)
+        except (PanelAPIError, XenetAPIError):
+            await callback.answer(t.ERROR_GENERIC, show_alert=True)
+            return
+        await update_service(service_id, status="deleted")
+        await callback.message.edit_text("سرویس با موفقیت از پنل حذف شد.")
+
     await callback.answer()
 
 

@@ -1,3 +1,4 @@
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -94,6 +95,12 @@ async def request_wholesaler(message: Message):
         t.WHOLESALER_REQUEST_INFO.format(fee=fee, balance=balance),
         reply_markup=confirm_keyboard(),
     )
+
+
+@router.message(default_state, F.text == t.BTN_CANCEL)
+async def cancel_wholesaler_request(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer(t.CANCELLED, reply_markup=await _user_menu(message.from_user.id))
 
 
 @router.message(default_state, F.text == t.BTN_CONFIRM)

@@ -19,6 +19,10 @@ DEFAULTS: dict[str, str] = {
     "user_discount_percent": "0",
     "wholesaler_discount_percent": "0",
     "new_users_have_tunnels": "0",
+    "notify_time_warning": "1",
+    "notify_time_expired": "1",
+    "notify_traffic_warning": "1",
+    "notify_traffic_expired": "1",
 }
 
 

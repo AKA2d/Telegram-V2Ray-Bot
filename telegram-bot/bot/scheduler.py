@@ -100,33 +100,47 @@ async def _check_services(bot):
 
 
 async def _check_single_service(bot, service, now: datetime):
-    """Check a single service and send warning if needed."""
+    """Check a single service and send warning/expired if needed.
+
+    Deduplication: each notification type (warning or expired) is sent at most
+    once per service period.  "Once per period" means we track the timestamp of
+    the last sent notification and only re-send if the service was renewed
+    (expires_at moved forward) since the last notification.
+    """
     from .panel_client import PanelAPIError, panel_client
+    from .settings_repo import get_setting
     from .xenet_client import XenetAPIError, xenet_client
     from .services_repo import update_service
 
-    # Check time
+    # --- Read admin notification settings ---
+    settings_time_warning = (await get_setting("notify_time_warning")) == "1"
+    settings_time_expired = (await get_setting("notify_time_expired")) == "1"
+    settings_traffic_warning = (await get_setting("notify_traffic_warning")) == "1"
+    settings_traffic_expired = (await get_setting("notify_traffic_expired")) == "1"
+
+    # --- Determine current warning / expired flags ---
     time_warning = False
     time_expired = False
     if service.expires_at:
         expires = service.expires_at if service.expires_at.tzinfo else service.expires_at.replace(tzinfo=timezone.utc)
+        created = service.created_at.replace(tzinfo=timezone.utc) if service.created_at.tzinfo is None else service.created_at
         if expires <= now:
             time_expired = True
         else:
             remaining = (expires - now).total_seconds()
-            total = (expires - service.created_at.replace(tzinfo=timezone.utc) if service.created_at.tzinfo
-                     else (expires - service.created_at.replace(tzinfo=timezone.utc)).total_seconds())
+            total = (expires - created).total_seconds()
             if total > 0 and remaining / total <= 0.1:
                 time_warning = True
 
-    # Check traffic (only for traffic-based services)
     traffic_warning = False
     traffic_expired = False
     if service.service_type != "unlimited":
         try:
             panel_user = await panel_client.get_user(service.panel_username)
-            bytes_used = panel_user.raw.get("usage") or panel_user.raw.get("data_usage") or panel_user.raw.get("used_traffic") or 0
-            total_bytes = float(service.traffic_gb) * 1024**3
+            bytes_used = (panel_user.raw.get("usage")
+                          or panel_user.raw.get("data_usage")
+                          or panel_user.raw.get("used_traffic") or 0)
+            total_bytes = float(service.traffic_gb) * 1024 ** 3
             if total_bytes > 0:
                 usage_ratio = bytes_used / total_bytes
                 if usage_ratio >= 1.0:
@@ -136,7 +150,6 @@ async def _check_single_service(bot, service, now: datetime):
         except PanelAPIError:
             pass
     else:
-        # For unlimited services, check Xenet account status
         if service.xenet_account_id:
             try:
                 xenet_config = await xenet_client.get_v2_account(service.xenet_account_id)
@@ -148,11 +161,46 @@ async def _check_single_service(bot, service, now: datetime):
             except XenetAPIError:
                 pass
 
-    # Send notification if needed
-    if time_expired or traffic_expired:
+    # --- Apply admin settings: filter by enabled notification types ---
+    if time_warning and not settings_time_warning:
+        time_warning = False
+    if time_expired and not settings_time_expired:
+        time_expired = False
+    if traffic_warning and not settings_traffic_warning:
+        traffic_warning = False
+    if traffic_expired and not settings_traffic_expired:
+        traffic_expired = False
+
+    wants_expired = time_expired or traffic_expired
+    wants_warning = time_warning or traffic_warning
+
+    # --- Deduplication ---
+    # A warning is only re-sent when expires_at has moved forward since the
+    # last warning (i.e. the service was renewed).  An expired notification is
+    # only re-sent when the service was previously renewed *after* the last
+    # expired notification and has expired again.
+    should_send_expired = False
+    should_send_warning = False
+
+    if wants_expired:
+        last = service.last_expired_sent_at
+        if last is None or (service.expires_at and service.expires_at > last):
+            should_send_expired = True
+    elif wants_warning:
+        last = service.last_warning_sent_at
+        if last is None or (service.expires_at and service.expires_at > last):
+            should_send_warning = True
+
+    if not should_send_expired and not should_send_warning:
+        return
+
+    # --- Send and record ---
+    if should_send_expired:
         await _send_expired_message(bot, service, time_expired, traffic_expired)
-    elif time_warning or traffic_warning:
+        await update_service(service.id, last_expired_sent_at=now)
+    elif should_send_warning:
         await _send_warning_message(bot, service, time_warning, traffic_warning)
+        await update_service(service.id, last_warning_sent_at=now)
 
 
 async def _send_warning_message(bot, service, time_warning: bool, traffic_warning: bool):

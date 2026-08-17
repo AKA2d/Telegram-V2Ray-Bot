@@ -1,11 +1,17 @@
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
 from .. import texts as t
 from ..config import is_admin
-from ..keyboards import admin_menu_keyboard, cancel_keyboard, guide_management_keyboard, main_menu
+from ..keyboards import (
+    admin_menu_keyboard,
+    cancel_keyboard,
+    guide_management_keyboard,
+    main_menu,
+    notify_settings_keyboard,
+)
 from ..panel_client import PanelAPIError, panel_client
 from ..services_repo import count_all_services
 from ..settings_repo import get_setting, set_setting
@@ -27,6 +33,16 @@ async def open_admin_menu(message: Message):
     sales_closed = (await get_setting("sales_closed")) == "1"
     tunnels_enabled = (await get_setting("new_users_have_tunnels")) == "1"
     await message.answer(t.ADMIN_MENU, reply_markup=admin_menu_keyboard(sales_closed, tunnels_enabled))
+
+
+@router.message(F.text == t.ADMIN_MENU_NOTIFY)
+async def open_notify_settings(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    await message.answer(
+        t.NOTIFY_SETTINGS_HEADER,
+        reply_markup=await notify_settings_keyboard(),
+    )
 
 
 @router.message(F.text == t.SALES_CLOSED_LABEL_ON)
@@ -55,6 +71,19 @@ async def toggle_tunnel_default(message: Message):
         await message.answer(t.TUNNEL_DEFAULT_ON, reply_markup=admin_menu_keyboard(tunnels_enabled=True))
     else:
         await message.answer(t.TUNNEL_DEFAULT_OFF, reply_markup=admin_menu_keyboard(tunnels_enabled=False))
+
+
+@router.callback_query(F.data.startswith("notify_toggle:"))
+async def toggle_notification(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer(t.NOT_AUTHORIZED, show_alert=True)
+        return
+    _, setting_key = callback.data.split(":", 1)
+    current = await get_setting(setting_key)
+    new_value = "0" if current == "1" else "1"
+    await set_setting(setting_key, new_value)
+    await callback.message.edit_reply_markup(reply_markup=await notify_settings_keyboard())
+    await callback.answer(t.NOTIFY_TOGGLE_DONE)
 
 
 @router.message(F.text == t.ADMIN_MENU_STATS)

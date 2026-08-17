@@ -169,6 +169,7 @@ def admin_menu_keyboard(sales_closed: bool | None = None, tunnels_enabled: bool 
         [KeyboardButton(text=t.ADMIN_MENU_USER_DISCOUNT), KeyboardButton(text=t.ADMIN_MENU_WHOLESALER_DISCOUNT)],
         [KeyboardButton(text=tunnel_text)],
         [KeyboardButton(text="📖 مدیریت راهنماها")],
+        [KeyboardButton(text=t.ADMIN_MENU_NOTIFY)],
         [KeyboardButton(text=status_text)],
         [KeyboardButton(text=t.BTN_BACK)],
     ]
@@ -357,6 +358,50 @@ def confirm_action_keyboard(action: str, telegram_id: int, service_id: int) -> I
             [InlineKeyboardButton(text="خیر، انصراف", callback_data=f"cust_svc_view:{telegram_id}:{service_id}")],
         ]
     )
+
+
+async def notify_settings_keyboard() -> InlineKeyboardMarkup:
+    """Inline keyboard with toggles for each user-facing notification type."""
+    from .settings_repo import get_setting
+
+    time_warning = (await get_setting("notify_time_warning")) == "1"
+    time_expired = (await get_setting("notify_time_expired")) == "1"
+    traffic_warning = (await get_setting("notify_traffic_warning")) == "1"
+    traffic_expired = (await get_setting("notify_traffic_expired")) == "1"
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(
+                text=t.NOTIFY_TIME_WARNING_ON if time_warning else t.NOTIFY_TIME_WARNING_OFF,
+                callback_data="notify_toggle:notify_time_warning",
+            )],
+            [InlineKeyboardButton(
+                text=t.NOTIFY_TIME_EXPIRED_ON if time_expired else t.NOTIFY_TIME_EXPIRED_OFF,
+                callback_data="notify_toggle:notify_time_expired",
+            )],
+            [InlineKeyboardButton(
+                text=t.NOTIFY_TRAFFIC_WARNING_ON if traffic_warning else t.NOTIFY_TRAFFIC_WARNING_OFF,
+                callback_data="notify_toggle:notify_traffic_warning",
+            )],
+            [InlineKeyboardButton(
+                text=t.NOTIFY_TRAFFIC_EXPIRED_ON if traffic_expired else t.NOTIFY_TRAFFIC_EXPIRED_OFF,
+                callback_data="notify_toggle:notify_traffic_expired",
+            )],
+            [InlineKeyboardButton(text=t.BTN_BACK, callback_data="cust_back")],
+        ]
+    )
+
+
+
+def svc_confirm_keyboard(action: str, service_id: int) -> InlineKeyboardMarkup:
+    """Confirmation keyboard for user-facing service disable/enable/delete."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=t.CONFIRM_YES, callback_data=f"svc_confirm:{action}:{service_id}")],
+            [InlineKeyboardButton(text=t.CONFIRM_NO, callback_data=f"svc_view:{service_id}")],
+        ]
+    )
+
 
 
 def connect_platform_keyboard() -> ReplyKeyboardMarkup:

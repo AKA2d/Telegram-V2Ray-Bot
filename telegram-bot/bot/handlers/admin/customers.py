@@ -207,6 +207,60 @@ async def delete_customer_service(callback: CallbackQuery):
     await callback.answer()
 
 
+async def _refresh_service_view(callback: CallbackQuery, telegram_id: int, service_id: int) -> None:
+    """Refresh the customer service view without calling callback.answer()."""
+    service = await get_service(service_id)
+    if not service:
+        return
+
+    if service.status == "deleted":
+        await callback.message.edit_text(
+            f"📦 سرویس #{service_id}\n\n⚠️ این سرویس از پنل حذف شده است.",
+            reply_markup=customer_service_actions_keyboard(telegram_id, service_id, "deleted"),
+        )
+        return
+
+    remaining_days = "نامحدود"
+    if service.expires_at:
+        now = datetime.now(timezone.utc)
+        expires = service.expires_at if service.expires_at.tzinfo else service.expires_at.replace(tzinfo=timezone.utc)
+        delta = expires - now
+        remaining_days = "منقضی شده" if delta.days <= 0 else f"{delta.days} روز"
+
+    if service.service_type == "unlimited":
+        remaining_traffic = "نامحدود"
+    else:
+        remaining_traffic = f"{service.traffic_gb} گیگ"
+        if service.status == "active":
+            try:
+                panel_user = await panel_client.get_user(service.panel_username)
+                bytes_used = panel_user.raw.get("usage") or panel_user.raw.get("data_usage") or panel_user.raw.get("used_traffic")
+                if bytes_used:
+                    used_gb = bytes_used / (1024 ** 3)
+                    remaining = max(0, float(service.traffic_gb) - used_gb)
+                    remaining_traffic = f"{remaining:.1f} از {service.traffic_gb} گیگ"
+            except PanelAPIError:
+                pass
+
+    type_indicator = "♾️ نامحدود" if service.service_type == "unlimited" else "📊 ترافیکی"
+    user_count_text = "1" if service.service_type == "unlimited" else "نامحدود"
+
+    text = t.CUSTOMER_SERVICE_DETAIL.format(
+        id=service.id,
+        panel_username=f"{service.panel_username} ({type_indicator})",
+        months=service.months,
+        user_count=user_count_text,
+        traffic_gb=service.traffic_gb,
+        status=service.status,
+        remaining_days=remaining_days,
+        remaining_traffic=remaining_traffic,
+        created_at=service.created_at.strftime("%Y-%m-%d") if service.created_at else "-",
+        expires_at=service.expires_at.strftime("%Y-%m-%d") if service.expires_at else "نامحدود",
+        link=service.subscription_link or "—",
+    )
+    await callback.message.edit_text(text, reply_markup=customer_service_actions_keyboard(telegram_id, service_id, service.status))
+
+
 @router.callback_query(F.data.startswith("cust_confirm:"))
 async def confirm_action(callback: CallbackQuery):
     _, action, telegram_id, service_id = callback.data.split(":")
@@ -252,15 +306,9 @@ async def confirm_action(callback: CallbackQuery):
         await update_service(service_id, status="deleted")
         await callback.answer("سرویس حذف شد.", show_alert=True)
 
-    # Refresh the view
-    refreshed = await get_service(service_id)
-    if refreshed.status == "deleted":
-        await callback.message.edit_text(
-            f"📦 سرویس #{service_id}\n\n⚠️ این سرویس از پنل حذف شده است.",
-            reply_markup=customer_service_actions_keyboard(telegram_id, service_id, "deleted"),
-        )
-    else:
-        await view_customer_service(callback, None)
+    # Refresh the view (skip callback.answer here since it was already called above)
+    await _refresh_service_view(callback, telegram_id, service_id)
+
 
 
 @router.callback_query(F.data.startswith("cust_svc_regen:"))
