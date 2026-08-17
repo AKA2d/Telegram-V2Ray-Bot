@@ -250,3 +250,48 @@ async def save_user_discount(message: Message, state: FSMContext):
 @router.message(AdminPricingSettings.wholesaler_discount)
 async def save_wholesaler_discount(message: Message, state: FSMContext):
     await _save_discount(message, state, "wholesaler_discount_percent", "عمده‌فروشان")
+
+
+# ---- Dev mode: test notification trigger ----
+
+@router.message(F.text == t.DEV_TRIGGER_NOTIFICATION)
+async def trigger_test_notification(message: Message):
+    from ..config import DEV_MODE
+    if not DEV_MODE or not is_admin(message.from_user.id):
+        return
+
+    from datetime import datetime, timedelta, timezone
+
+    from ..models import Service
+    from ..scheduler import _EvalResult, _send_user_notification
+    from ..db import async_session
+    from sqlalchemy import select
+
+    # Find active services owned by this admin (or any active service)
+    async with async_session() as session:
+        result = await session.execute(
+            select(Service).where(Service.status == "active")
+        )
+        services = result.scalars().all()
+
+    # Build synthetic evaluation results for demonstration
+    now = datetime.now(timezone.utc)
+    entries: list[tuple[_EvalResult, Service]] = []
+    for svc in services[:5]:  # cap at 5 for the demo
+        entries.append((
+            _EvalResult(
+                is_expired=False,
+                time_flag=True,
+                traffic_flag=True,
+                time_detail="2 روز باقی‌مانده",
+                traffic_detail=f"8.5 از {svc.traffic_gb} گیگ مصرف شده",
+            ),
+            svc,
+        ))
+
+    if not entries:
+        await message.answer("⚠️ هیچ سرویس فعالی برای نمایش اعلان تست وجود ندارد.")
+        return
+
+    await _send_user_notification(message.bot, message.from_user.id, entries)
+    await message.answer(t.DEV_NOTIFICATION_SENT)

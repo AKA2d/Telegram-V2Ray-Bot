@@ -76,3 +76,6 @@ DIRECT_NODE_TAGS = [
 # Xenet API key for unlimited services
 XENET_API_KEY = os.environ.get("XENET_API_KEY", "")
 XENET_BASE_URL = "https://api.xenet.space/api/reseller/v1"
+
+# Developer mode – enables debug tools in the admin panel.
+DEV_MODE = os.environ.get("DEV_MODE", "false").lower() == "true"

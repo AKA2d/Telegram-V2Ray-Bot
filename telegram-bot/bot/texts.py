@@ -325,3 +325,7 @@ NOTIFY_TRAFFIC_WARNING_OFF = "📊 هشدار اتمام ترافیک: غیرف�
 NOTIFY_TRAFFIC_EXPIRED_ON = "🚫 اتمام ترافیک سرویس: فعال ✅"
 NOTIFY_TRAFFIC_EXPIRED_OFF = "🚫 اتمام ترافیک سرویس: غیرفعال ❌"
 NOTIFY_TOGGLE_DONE = "تنظیمات اعلان‌ها به‌روزرسانی شد."
+
+# ---- Dev mode ----------------------------------------------------------------
+DEV_TRIGGER_NOTIFICATION = "🔔 ارسال اعلان تست"
+DEV_NOTIFICATION_SENT = "✅ اعلان تست با موفقیت ارسال شد."

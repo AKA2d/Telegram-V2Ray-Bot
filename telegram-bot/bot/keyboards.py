@@ -173,6 +173,9 @@ def admin_menu_keyboard(sales_closed: bool | None = None, tunnels_enabled: bool 
         [KeyboardButton(text=status_text)],
         [KeyboardButton(text=t.BTN_BACK)],
     ]
+    from .config import DEV_MODE
+    if DEV_MODE:
+        rows.insert(-1, [KeyboardButton(text=t.DEV_TRIGGER_NOTIFICATION)])  # before back button
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
 

@@ -1,13 +1,27 @@
 """Periodic service expiry, traffic warnings, and Xenet balance monitoring."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 CHECK_HOURS = [8, 12, 16]  # 8am, 12pm, 4pm
 XENET_BALANCE_WARNING_THRESHOLD = 100  # Warn when balance is below this amount
+
+
+@dataclass
+class _EvalResult:
+    """Result of evaluating a single service for notification needs."""
+    is_expired: bool  # True = expired, False = warning
+    time_flag: bool   # time-related issue (expired or expiring soon)
+    traffic_flag: bool  # traffic-related issue (exhausted or nearly exhausted)
+    time_detail: Optional[str] = None  # human-readable time detail (e.g. "2 days")
+    traffic_detail: Optional[str] = None  # human-readable traffic detail
 
 
 async def _check_panel_traffic(bot):
@@ -77,10 +91,16 @@ async def _check_xenet_balance(bot):
 
 
 async def _check_services(bot):
-    """Check all active services and send warnings."""
+    """Check all active services and send consolidated warnings per user.
+
+    Instead of sending one message per service, services are grouped by
+    owner and a single message is sent per user listing all their services
+    that need attention.
+    """
+    from collections import defaultdict
+
     from .db import async_session
     from .models import Service
-    from .panel_client import PanelAPIError, panel_client
     from .services_repo import update_service
     from sqlalchemy import select
 
@@ -92,25 +112,44 @@ async def _check_services(bot):
         )
         services = result.scalars().all()
 
+    # --- Evaluate every service and group results by owner ---
+    # Each entry: {owner_id: [(_EvalResult, service), ...]}
+    user_results: dict[int, list[tuple[_EvalResult, Service]]] = defaultdict(list)
+
     for service in services:
         try:
-            await _check_single_service(bot, service, now)
+            eval_result = await _evaluate_service(service, now)
+            if eval_result is not None:
+                user_results[service.owner_telegram_id].append((eval_result, service))
         except Exception:
-            logger.exception("Error checking service %s", service.id)
+            logger.exception("Error evaluating service %s", service.id)
+
+    # --- Send one consolidated message per user ---
+    for owner_id, entries in user_results.items():
+        try:
+            await _send_user_notification(bot, owner_id, entries)
+            # Record timestamps for every service that was included
+            now_ts = datetime.now(timezone.utc)
+            for eval_result, service in entries:
+                if eval_result.is_expired:
+                    await update_service(service.id, last_expired_sent_at=now_ts)
+                else:
+                    await update_service(service.id, last_warning_sent_at=now_ts)
+        except Exception:
+            logger.exception("Error sending consolidated notification to user %s", owner_id)
 
 
-async def _check_single_service(bot, service, now: datetime):
-    """Check a single service and send warning/expired if needed.
+async def _evaluate_service(service, now: datetime) -> Optional[_EvalResult]:
+    """Evaluate a single service and return its notification needs.
 
-    Deduplication: each notification type (warning or expired) is sent at most
-    once per service period.  "Once per period" means we track the timestamp of
-    the last sent notification and only re-send if the service was renewed
-    (expires_at moved forward) since the last notification.
+    Returns ``None`` if the service does not need any notification (either
+    because nothing is wrong, or because the admin has disabled that
+    notification type, or because the notification was already sent and
+    the service has not been renewed since).
     """
     from .panel_client import PanelAPIError, panel_client
     from .settings_repo import get_setting
     from .xenet_client import XenetAPIError, xenet_client
-    from .services_repo import update_service
 
     # --- Read admin notification settings ---
     settings_time_warning = (await get_setting("notify_time_warning")) == "1"
@@ -121,19 +160,32 @@ async def _check_single_service(bot, service, now: datetime):
     # --- Determine current warning / expired flags ---
     time_warning = False
     time_expired = False
+    time_detail: Optional[str] = None
     if service.expires_at:
         expires = service.expires_at if service.expires_at.tzinfo else service.expires_at.replace(tzinfo=timezone.utc)
         created = service.created_at.replace(tzinfo=timezone.utc) if service.created_at.tzinfo is None else service.created_at
         if expires <= now:
             time_expired = True
+            time_detail = "زمان سرویس تمام شده"
         else:
             remaining = (expires - now).total_seconds()
             total = (expires - created).total_seconds()
             if total > 0 and remaining / total <= 0.1:
                 time_warning = True
+                remaining_days = (expires - now).days
+                if service.service_type == "unlimited" and service.xenet_account_id:
+                    try:
+                        xenet_config = await xenet_client.get_v2_account(service.xenet_account_id)
+                        days_left = xenet_config.get("days_left", 0)
+                        time_detail = f"{days_left} روز باقی‌مانده"
+                    except XenetAPIError:
+                        time_detail = "کمتر از ۳ روز باقی‌مانده"
+                else:
+                    time_detail = f"{remaining_days} روز باقی‌مانده"
 
     traffic_warning = False
     traffic_expired = False
+    traffic_detail: Optional[str] = None
     if service.service_type != "unlimited":
         try:
             panel_user = await panel_client.get_user(service.panel_username)
@@ -143,10 +195,13 @@ async def _check_single_service(bot, service, now: datetime):
             total_bytes = float(service.traffic_gb) * 1024 ** 3
             if total_bytes > 0:
                 usage_ratio = bytes_used / total_bytes
+                used_gb = bytes_used / (1024**3)
                 if usage_ratio >= 1.0:
                     traffic_expired = True
+                    traffic_detail = f"ترافیک تمام شده ({used_gb:.1f} از {service.traffic_gb} گیگ)"
                 elif usage_ratio >= 0.9:
                     traffic_warning = True
+                    traffic_detail = f"{used_gb:.1f} از {service.traffic_gb} گیگ مصرف شده"
         except PanelAPIError:
             pass
     else:
@@ -156,8 +211,10 @@ async def _check_single_service(bot, service, now: datetime):
                 days_left = xenet_config.get("days_left", 30)
                 if days_left <= 0:
                     time_expired = True
+                    time_detail = "زمان سرویس تمام شده"
                 elif days_left <= 3:
                     time_warning = True
+                    time_detail = f"{days_left} روز باقی‌مانده"
             except XenetAPIError:
                 pass
 
@@ -174,88 +231,71 @@ async def _check_single_service(bot, service, now: datetime):
     wants_expired = time_expired or traffic_expired
     wants_warning = time_warning or traffic_warning
 
-    # --- Deduplication ---
-    # A warning is only re-sent when expires_at has moved forward since the
-    # last warning (i.e. the service was renewed).  An expired notification is
-    # only re-sent when the service was previously renewed *after* the last
-    # expired notification and has expired again.
-    should_send_expired = False
-    should_send_warning = False
+    if not wants_expired and not wants_warning:
+        return None
 
+    # --- Deduplication ---
     if wants_expired:
         last = service.last_expired_sent_at
-        if last is None or (service.expires_at and service.expires_at > last):
-            should_send_expired = True
+        if last is not None and (not service.expires_at or service.expires_at <= last):
+            return None
     elif wants_warning:
         last = service.last_warning_sent_at
-        if last is None or (service.expires_at and service.expires_at > last):
-            should_send_warning = True
+        if last is not None and (not service.expires_at or service.expires_at <= last):
+            return None
 
-    if not should_send_expired and not should_send_warning:
+    return _EvalResult(
+        is_expired=wants_expired,
+        time_flag=time_expired or time_warning,
+        traffic_flag=traffic_expired or traffic_warning,
+        time_detail=time_detail,
+        traffic_detail=traffic_detail,
+    )
+
+
+async def _send_user_notification(bot, owner_id: int, entries: list[tuple[_EvalResult, Service]]) -> None:
+    """Send a single consolidated notification listing all affected services."""
+    # Separate into expired vs warning buckets
+    expired_entries = [(ev, svc) for ev, svc in entries if ev.is_expired]
+    warning_entries = [(ev, svc) for ev, svc in entries if not ev.is_expired]
+
+    parts: list[str] = []
+
+    if expired_entries:
+        parts.append("⛔ سرویس‌های شما به اتمام رسیده است:")
+        for ev, svc in expired_entries:
+            svc_label = svc.panel_username or f"سرویس #{svc.id}"
+            details = []
+            if ev.time_detail:
+                details.append(f"📅 {ev.time_detail}")
+            if ev.traffic_detail:
+                details.append(f"🌐 {ev.traffic_detail}")
+            detail_str = " — ".join(details) if details else ""
+            parts.append(f"\n  • {svc_label}{(' — ' + detail_str) if detail_str else ''}")
+        parts.append("\nبرای تمدید یا خرید سرویس جدید، از منوی اصلی استفاده کنید.")
+
+    if warning_entries:
+        parts.append("\n⚠️ سرویس‌های شما در حال اتمام است:")
+        for ev, svc in warning_entries:
+            svc_label = svc.panel_username or f"سرویس #{svc.id}"
+            details = []
+            if ev.time_detail:
+                details.append(f"📅 {ev.time_detail}")
+            if ev.traffic_detail:
+                details.append(f"🌐 {ev.traffic_detail}")
+            detail_str = " — ".join(details) if details else ""
+            parts.append(f"\n  • {svc_label}{(' — ' + detail_str) if detail_str else ''}")
+        parts.append("\nبرای تمدید سرویس، از منوی مدیریت سرویس استفاده کنید.")
+
+    if not parts:
         return
 
-    # --- Send and record ---
-    if should_send_expired:
-        await _send_expired_message(bot, service, time_expired, traffic_expired)
-        await update_service(service.id, last_expired_sent_at=now)
-    elif should_send_warning:
-        await _send_warning_message(bot, service, time_warning, traffic_warning)
-        await update_service(service.id, last_warning_sent_at=now)
-
-
-async def _send_warning_message(bot, service, time_warning: bool, traffic_warning: bool):
-    """Send warning message to user."""
-    lines = ["⚠️ هشدار: سرویس شما در حال اتمام است!\n"]
-
-    if time_warning:
-        if service.service_type == "unlimited" and service.xenet_account_id:
-            # For unlimited services, show Xenet days left
-            try:
-                from .xenet_client import xenet_client
-                xenet_config = await xenet_client.get_v2_account(service.xenet_account_id)
-                days_left = xenet_config.get("days_left", 0)
-                lines.append(f"📅 زمان باقی‌مانده: {days_left} روز")
-            except Exception:
-                lines.append("📅 زمان باقی‌مانده: کمتر از ۳ روز")
-        else:
-            expires = service.expires_at if service.expires_at.tzinfo else service.expires_at.replace(tzinfo=timezone.utc)
-            remaining_days = (expires - datetime.now(timezone.utc)).days
-            lines.append(f"📅 زمان باقی‌مانده: {remaining_days} روز")
-
-    if traffic_warning:
-        try:
-            from .panel_client import panel_client
-            panel_user = await panel_client.get_user(service.panel_username)
-            bytes_used = panel_user.raw.get("usage") or panel_user.raw.get("data_usage") or panel_user.raw.get("used_traffic") or 0
-            used_gb = bytes_used / (1024**3)
-            lines.append(f"🌐 ترافیک مصرف‌شده: {used_gb:.1f} از {service.traffic_gb} گیگ")
-        except Exception:
-            pass
-
-    lines.append("\nبرای تمدید سرویس، از منوی مدیریت سرویس استفاده کنید.")
+    message = "\n".join(parts)
 
     try:
-        await bot.send_message(service.owner_telegram_id, "\n".join(lines))
+        await bot.send_message(owner_id, message)
     except Exception:
-        logger.warning("Failed to send warning to user %s", service.owner_telegram_id)
-
-
-async def _send_expired_message(bot, service, time_expired: bool, traffic_expired: bool):
-    """Send expired message to user."""
-    lines = ["⛔ سرویس شما به اتمام رسیده است!\n"]
-
-    if time_expired:
-        lines.append("📅 زمان سرویس تمام شده است.")
-
-    if traffic_expired:
-        lines.append("🌐 ترافیک سرویس تمام شده است.")
-
-    lines.append("\nبرای تمدید یا خرید سرویس جدید، از منوی اصلی استفاده کنید.")
-
-    try:
-        await bot.send_message(service.owner_telegram_id, "\n".join(lines))
-    except Exception:
-        logger.warning("Failed to send expired message to user %s", service.owner_telegram_id)
+        logger.warning("Failed to send consolidated notification to user %s", owner_id)
 
 
 async def _scheduler_loop(bot):
