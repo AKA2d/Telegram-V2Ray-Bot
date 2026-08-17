@@ -41,6 +41,4 @@ async def get_test_settings() -> dict:
         "days": int(await get_setting("test_days")),
         "enabled": (await get_setting("test_enabled")) == "1",
         "provider": await get_setting("test_provider"),
-        "xenet_traffic_gb": float(await get_setting("test_xenet_traffic_gb")),
-        "xenet_days": int(await get_setting("test_xenet_days")),
     }

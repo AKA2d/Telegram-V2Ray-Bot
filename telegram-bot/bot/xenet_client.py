@@ -105,6 +105,31 @@ class XenetClient:
             raw=config_data,
         )
 
+    async def create_v2_test_account(self) -> XenetV2Config:
+        """Create a test V2Ray account via the /v2/test endpoint.
+
+        Traffic and duration are controlled server-side by Xenet.
+        """
+        resp = await self._request("POST", "/v2/test")
+        data = resp.json()
+        if not data.get("ok"):
+            raise XenetAPIError(data.get("message", "Failed to create test V2 account"))
+
+        config_data = data.get("config", {})
+        return XenetV2Config(
+            id=config_data.get("id", 0),
+            kind=config_data.get("kind", "direct"),
+            name=config_data.get("name", ""),
+            sub_link=config_data.get("sub_link", ""),
+            users=config_data.get("users", 1),
+            price_paid=config_data.get("price_paid", 0),
+            expire_date=config_data.get("expire_date", ""),
+            status=config_data.get("status", "active"),
+            days_left=config_data.get("days_left", 30),
+            enabled=config_data.get("enabled", True),
+            raw=config_data,
+        )
+
     async def get_v2_account(self, account_id: int) -> dict:
         """Get V2Ray account status."""
         resp = await self._request("GET", f"/v2/{account_id}")

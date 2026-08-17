@@ -183,8 +183,7 @@ TEST_SETTINGS_HEADER = "تنظیمات سرویس تست:"
 TEST_SETTINGS_UPDATED = "تنظیمات سرویس تست به‌روزرسانی شد."
 ASK_TEST_TRAFFIC = "ترافیک سرویس تست (گیگابایت) را وارد کنید:"
 ASK_TEST_DAYS = "مدت سرویس تست (روز) را وارد کنید:"
-ASK_TEST_XENET_TRAFFIC = "ترافیک سرویس تست Xenet (گیگابایت) را وارد کنید:"
-ASK_TEST_XENET_DAYS = "مدت سرویس تست Xenet (روز) را وارد کنید:"
+
 
 PANEL_STATS = (
     "📊 آمار پنل\n\n"

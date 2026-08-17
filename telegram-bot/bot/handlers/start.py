@@ -155,12 +155,9 @@ async def get_test_service(message: Message):
     provider = test_settings["provider"]
 
     if provider == "xenet":
-        # Create test service using Xenet API
+        # Create test service using Xenet /v2/test endpoint (server-side controlled)
         try:
-            xenet_config = await xenet_client.create_v2_account(
-                users=1,
-                idempotency_key=f"test_{user_id}_{int(time.time())}",
-            )
+            xenet_config = await xenet_client.create_v2_test_account()
             subscription_link = xenet_config.sub_link
             xenet_account_id = xenet_config.id
             panel_username = xenet_config.name
@@ -168,11 +165,17 @@ async def get_test_service(message: Message):
             await message.answer(t.ERROR_GENERIC, reply_markup=main_menu(is_user_admin))
             return
 
-        # Xenet test services use custom settings from admin
-        traffic_gb = test_settings["xenet_traffic_gb"]
-        days = test_settings["xenet_days"]
-        duration_seconds = days * 86400
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)
+        # Traffic and duration are controlled server-side by Xenet.
+        # Use expire_date from the response if available, otherwise default to 30 days.
+        if xenet_config.expire_date:
+            try:
+                expires_at = datetime.fromisoformat(xenet_config.expire_date)
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+            except ValueError:
+                expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+        else:
+            expires_at = datetime.now(timezone.utc) + timedelta(days=30)
 
         await create_service(
             owner_telegram_id=user_id,
@@ -182,8 +185,8 @@ async def get_test_service(message: Message):
             subscription_link=subscription_link,
             status="active",
             user_count=1,
-            months=days,
-            traffic_gb=traffic_gb,
+            months=xenet_config.days_left,
+            traffic_gb=0,
             price=0,
             expires_at=expires_at,
             xenet_account_id=xenet_account_id,
