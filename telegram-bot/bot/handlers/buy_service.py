@@ -285,7 +285,15 @@ async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan, eff
 
     from ..qr_gen import generate_qr_image
 
-    text = t.WALLET_PAYMENT_SUCCESS.format(link=subscription_link or "—")
+    traffic_text = "نامحدود" if plan.service_type == "unlimited" else f"{plan.traffic_gb} گیگابایت"
+    text = t.SERVICE_ACTIVATED_DETAILED.format(
+        username=panel_username,
+        plan_name=plan.name,
+        price=f"{effective_price:,}",
+        months=plan.months * 30,
+        traffic=traffic_text,
+        link=subscription_link or "—",
+    )
     if subscription_link:
         qr_photo = generate_qr_image(subscription_link)
         await callback.message.answer_photo(qr_photo, caption=text)

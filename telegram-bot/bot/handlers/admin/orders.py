@@ -122,15 +122,21 @@ async def approve_order(callback: CallbackQuery):
         current_traffic = int(float(await get_setting("sold_traffic")))
         await set_setting("sold_traffic", str(current_traffic + float(service.traffic_gb if service.service_type == "traffic_based" else 0)))
         await callback.bot.send_message(order.telegram_id, t.ORDER_APPROVED_CUSTOMER)
+        traffic_text = "نامحدود" if service.service_type == "unlimited" else f"{service.traffic_gb} گیگابایت"
+        from ...qr_gen import generate_qr_image
+        text = t.SERVICE_ACTIVATED_DETAILED.format(
+            username=update_fields.get("panel_username", service.panel_username),
+            plan_name=service.panel_username,
+            price=f"{int(order.amount):,}",
+            months=service.months * 30,
+            traffic=traffic_text,
+            link=subscription_link or "—",
+        )
         if subscription_link:
-            from ...qr_gen import generate_qr_image
-            text = t.SERVICE_ACTIVATED_CUSTOMER.format(link=subscription_link)
             qr_photo = generate_qr_image(subscription_link)
             await callback.bot.send_photo(order.telegram_id, qr_photo, caption=text)
         else:
-            await callback.bot.send_message(
-                order.telegram_id, t.SERVICE_ACTIVATED_CUSTOMER.format(link="—")
-            )
+            await callback.bot.send_message(order.telegram_id, text)
         await callback.bot.send_message(order.telegram_id, t.POST_PURCHASE_HINT)
     else:
         # Non-provisioning orders have no external account creation step, but

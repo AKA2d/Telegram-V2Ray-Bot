@@ -226,7 +226,22 @@ async def get_test_service(message: Message):
     await mark_test_used(user_id)
 
     from ..qr_gen import generate_qr_image
-    text = t.TEST_ACTIVATED.format(link=subscription_link or "—")
+    if provider == "xenet":
+        traffic_text = "نامحدود"
+        plan_name = "تست رایگان"
+        days_display = xenet_config.days_left * 30 if xenet_config.days_left else 30
+    else:
+        traffic_text = f"{test_settings['traffic_gb']} گیگابایت"
+        plan_name = "تست رایگان"
+        days_display = test_settings["days"] * 30
+    text = t.SERVICE_ACTIVATED_DETAILED.format(
+        username=panel_username,
+        plan_name=plan_name,
+        price="رایگان",
+        months=days_display,
+        traffic=traffic_text,
+        link=subscription_link or "—",
+    )
     if subscription_link:
         qr_photo = generate_qr_image(subscription_link)
         await message.answer_photo(qr_photo, caption=text, reply_markup=main_menu(is_user_admin))
