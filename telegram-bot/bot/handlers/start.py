@@ -268,7 +268,3 @@ async def get_test_service(message: Message):
         await message.answer(text, reply_markup=main_menu(is_user_admin))
     await message.answer(t.POST_PURCHASE_HINT)
 
-
-@router.message(default_state, F.text)
-async def fallback_unknown(message: Message):
-    await message.answer(t.UNKNOWN_COMMAND)

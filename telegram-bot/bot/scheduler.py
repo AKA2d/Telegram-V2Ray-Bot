@@ -204,10 +204,10 @@ async def _evaluate_service(service, now: datetime) -> Optional[_EvalResult]:
                 used_gb = bytes_used / (1024**3)
                 if usage_ratio >= 1.0:
                     traffic_expired = True
-                    traffic_detail = f"ترافیک تمام شده ({used_gb:.1f} از {service.traffic_gb} گیگ)"
+                    traffic_detail = f"\nترافیک تمام شده \n({used_gb:.1f} از {service.traffic_gb} گیگ)\n"
                 elif usage_ratio >= 0.9:
                     traffic_warning = True
-                    traffic_detail = f"{used_gb:.1f} از {service.traffic_gb} گیگ مصرف شده"
+                    traffic_detail = f"\n{used_gb:.1f} از {service.traffic_gb} \nگیگ مصرف شده\n"
         except PanelAPIError:
             pass
     else:
@@ -217,10 +217,10 @@ async def _evaluate_service(service, now: datetime) -> Optional[_EvalResult]:
                 days_left = xenet_config.get("days_left", 30)
                 if days_left <= 0:
                     time_expired = True
-                    time_detail = "زمان سرویس تمام شده"
+                    time_detail = "\nزمان سرویس تمام شده\n"
                 elif days_left <= 3:
                     time_warning = True
-                    time_detail = f"{days_left} روز باقی‌مانده"
+                    time_detail = f"\n{days_left} روز باقی‌مانده\n"
             except XenetAPIError:
                 pass
 
