@@ -96,10 +96,37 @@ def admin_test_keyboard(test_enabled: bool, provider: str = "panel") -> InlineKe
             [InlineKeyboardButton(text=f"ارائه‌دهنده: {provider_name}", callback_data="test_toggle_provider")],
             [InlineKeyboardButton(text="⏱ تغییر مدت (پنل)", callback_data="test_edit_days")],
             [InlineKeyboardButton(text="🌐 تغییر ترافیک (پنل)", callback_data="test_edit_traffic")],
+            [InlineKeyboardButton(text="🏷️ سقف تست عمده‌فروشان", callback_data="test_edit_wholesaler_limit")],
+            [InlineKeyboardButton(text="📋 استثناءهای عمده‌فروشان", callback_data="test_wholesaler_overrides")],
             [InlineKeyboardButton(text="🗑 پاک کردن لیست کاربران", callback_data="test_clear_users")],
+            [InlineKeyboardButton(text="🗑 پاک کردن لیست تست عمده‌فروشان", callback_data="test_clear_wholesaler_tests")],
             [InlineKeyboardButton(text=t.BTN_BACK, callback_data="cust_back")],
         ]
     )
+
+
+def wholesaler_test_overrides_keyboard(wholesalers: list, global_limit: int) -> InlineKeyboardMarkup:
+    rows = []
+    for w in wholesalers:
+        override = w.test_limit_override
+        icon = "⭐" if override is not None else "👤"
+        rows.append([InlineKeyboardButton(
+            text=f"{icon} #{w.telegram_id} (سقف: {override if override is not None else global_limit})",
+            callback_data=f"test_wsl_override:{w.telegram_id}",
+        )])
+    rows.append([InlineKeyboardButton(text=t.BTN_BACK, callback_data="cust_back")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def wholesaler_test_override_actions_keyboard(telegram_id: int, has_override: bool) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(text="✏️ تغییر سقف", callback_data=f"test_wsl_set:{telegram_id}")],
+    ]
+    if has_override:
+        rows.append([InlineKeyboardButton(text="🔄 بازگشت به پیش‌فرض", callback_data=f"test_wsl_reset:{telegram_id}")])
+    rows.append([InlineKeyboardButton(text="🗑 پاک کردن لیست تست", callback_data=f"test_wsl_clear:{telegram_id}")])
+    rows.append([InlineKeyboardButton(text=t.BTN_BACK, callback_data="test_wholesaler_overrides")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def admin_guide_keyboard() -> InlineKeyboardMarkup:

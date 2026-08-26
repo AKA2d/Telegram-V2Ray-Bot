@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from .db import async_session
-from .models import TestServiceUsage
+from .models import TestServiceUsage, Service
 from .settings_repo import get_setting
 
 
@@ -41,4 +41,57 @@ async def get_test_settings() -> dict:
         "days": int(await get_setting("test_days")),
         "enabled": (await get_setting("test_enabled")) == "1",
         "provider": await get_setting("test_provider"),
+        "wholesaler_limit": int(await get_setting("test_wholesaler_limit")),
     }
+
+
+async def count_user_tests(telegram_id: int) -> int:
+    """Count how many test services a user has been given (price=0 services)."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Service).where(
+                Service.owner_telegram_id == telegram_id,
+                Service.price == 0,
+            )
+        )
+        return len(result.scalars().all())
+
+
+async def clear_wholesaler_test_services(telegram_id: int) -> int:
+    """Delete price=0 services for a specific user to reset their test count."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Service).where(
+                Service.owner_telegram_id == telegram_id,
+                Service.price == 0,
+            )
+        )
+        services = result.scalars().all()
+        count = len(services)
+        for s in services:
+            await session.delete(s)
+        await session.commit()
+        return count
+
+
+async def clear_all_wholesaler_test_services() -> int:
+    """Delete all price=0 services for all wholesalers."""
+    from .models import Wholesaler
+
+    async with async_session() as session:
+        w_result = await session.execute(select(Wholesaler.telegram_id))
+        wholesaler_ids = [row[0] for row in w_result.all()]
+        if not wholesaler_ids:
+            return 0
+        result = await session.execute(
+            select(Service).where(
+                Service.owner_telegram_id.in_(wholesaler_ids),
+                Service.price == 0,
+            )
+        )
+        services = result.scalars().all()
+        count = len(services)
+        for s in services:
+            await session.delete(s)
+        await session.commit()
+        return count

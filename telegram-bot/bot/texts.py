@@ -188,12 +188,24 @@ ADMIN_MENU_TUNNEL_DEFAULT_OFF = "🔴 تانل: غیرفعال"
 
 TEST_ALREADY_USED = "شما قبلاً از سرویس رایگان استفاده کرده‌اید."
 TEST_NOT_AVAILABLE = "سرویس رایگان در حال حاضر غیرفعال است."
+TEST_LIMIT_REACHED = "شما از حد مجاز سرویس تست ({used}/{limit}) استفاده کرده‌اید."
 TEST_ACTIVATED = "سرویس رایگان شما فعال شد!\n\n🔗 لینک اشتراک:\n{link}"
 TEST_CLEARED = "لیست کاربران تست پاک شد. {count} کاربر حذف شد."
 TEST_SETTINGS_HEADER = "تنظیمات سرویس تست:"
 TEST_SETTINGS_UPDATED = "تنظیمات سرویس تست به‌روزرسانی شد."
 ASK_TEST_TRAFFIC = "ترافیک سرویس تست (گیگابایت) را وارد کنید:"
 ASK_TEST_DAYS = "مدت سرویس تست (روز) را وارد کنید:"
+ASK_TEST_WHOLESALER_LIMIT = "سقف تست عمده‌فروشان را وارد کنید (عدد):"
+TEST_WHOLESALER_OVERRIDES_HEADER = "🏷️ استثناءهای سقف تست عمده‌فروشان\n\nسقف پیش‌فرض: {limit}\n\nروی یک عمده‌فروش کلیک کنید:"
+TEST_WHOLESALER_OVERRIDE_DETAIL = (
+    "👤 عمده‌فروش #{telegram_id}\n\n"
+    "سقف فعلی: {override}\n"
+    "سقف پیش‌فرض: {global_limit}"
+)
+ASK_WHOLESALER_OVERRIDE_LIMIT = "سقف تست جدید برای عمده‌فروش #{telegram_id} را وارد کنید:"
+WHOLESALER_OVERRIDE_SET = "سقف تست عمده‌فروش #{telegram_id} به {limit} تغییر کرد."
+TEST_WHOLESALER_TESTS_CLEARED = "لیست تست عمده‌فروش #{telegram_id} پاک شد. {count} سرویس تست حذف شد."
+TEST_ALL_WHOLESALER_TESTS_CLEARED = "لیست تست تمام عمده‌فروشان پاک شد. {count} سرویس تست حذف شد."
 
 
 PANEL_STATS = (

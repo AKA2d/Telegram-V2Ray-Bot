@@ -15,7 +15,7 @@ from ..membership import is_channel_member
 from ..panel_client import PanelAPIError, panel_client
 from ..xenet_client import XenetAPIError, xenet_client
 from ..services_repo import create_service
-from ..test_repo import get_test_settings, has_used_test, mark_test_used
+from ..test_repo import get_test_settings, has_used_test, mark_test_used, count_user_tests
 from ..users_repo import get_or_create_user
 from ..wholesalers_repo import is_wholesaler
 
@@ -148,9 +148,26 @@ async def get_test_service(message: Message):
         await message.answer(t.TEST_NOT_AVAILABLE, reply_markup=main_menu(is_user_admin))
         return
 
-    if await has_used_test(user_id):
-        await message.answer(t.TEST_ALREADY_USED, reply_markup=main_menu(is_user_admin))
-        return
+    # Check test eligibility: wholesaler vs regular user
+    from ..wholesalers_repo import get_wholesaler_by_telegram_id
+    wholesaler = await get_wholesaler_by_telegram_id(user_id)
+
+    if wholesaler is not None:
+        # Wholesaler: check against effective limit (per-wholesaler override or global)
+        effective_limit = (
+            wholesaler.test_limit_override
+            if wholesaler.test_limit_override is not None
+            else test_settings["wholesaler_limit"]
+        )
+        used = await count_user_tests(user_id)
+        if used >= effective_limit:
+            await message.answer(t.TEST_LIMIT_REACHED.format(used=used, limit=effective_limit), reply_markup=main_menu(is_user_admin))
+            return
+    else:
+        # Regular user: single use only
+        if await has_used_test(user_id):
+            await message.answer(t.TEST_ALREADY_USED, reply_markup=main_menu(is_user_admin))
+            return
 
     provider = test_settings["provider"]
 
@@ -223,7 +240,9 @@ async def get_test_service(message: Message):
             expires_at=expires_at,
         )
 
-    await mark_test_used(user_id)
+    # Mark test used for regular users (single-use tracking)
+    if wholesaler is None:
+        await mark_test_used(user_id)
 
     from ..qr_gen import generate_qr_image
     if provider == "xenet":

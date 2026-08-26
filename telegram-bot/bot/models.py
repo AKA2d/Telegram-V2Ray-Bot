@@ -108,6 +108,7 @@ class Wholesaler(Base):
 
     telegram_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.telegram_id"), primary_key=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    test_limit_override: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None = use global limit
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["User"] = relationship(back_populates="wholesaler", uselist=False)
