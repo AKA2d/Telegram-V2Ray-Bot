@@ -451,7 +451,7 @@ async def add_service_confirm(callback: CallbackQuery, state: FSMContext):
             except PanelAPIError:
                 pass
 
-        await update_service(extend_service_id, traffic_gb=new_traffic, expires_at=new_expires, months=service.months + plan.months)
+        await update_service(extend_service_id, traffic_gb=new_traffic, expires_at=new_expires, months=service.months + plan.months, last_warning_sent_at=None)
         await state.clear()
         await callback.message.edit_text(f"سرویس #{extend_service_id} با موفقیت تمدید شد.\n\n+{plan.months} ماه")
         await callback.answer()

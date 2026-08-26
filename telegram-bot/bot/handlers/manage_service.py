@@ -519,7 +519,7 @@ async def _apply_extend(service, add_months: int, add_traffic: int):
         except PanelAPIError:
             pass
 
-    await update_service(service.id, traffic_gb=new_traffic, expires_at=new_expires, months=service.months + add_months)
+    await update_service(service.id, traffic_gb=new_traffic, expires_at=new_expires, months=service.months + add_months, last_warning_sent_at=None)
 
 
 @router.message(default_state, F.text.regexp(r"^[A-Za-z0-9\-_:/.]{6,}$"))

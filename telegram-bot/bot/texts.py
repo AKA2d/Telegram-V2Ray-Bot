@@ -164,6 +164,7 @@ CONNECT_PLATFORM_WINDOWS = "💻 ویندوز"
 CONNECT_CHOOSE_APP = "یکی از اپلیکیشن‌های زیر را انتخاب کنید:"
 
 CANCELLED = "عملیات لغو شد."
+UNKNOWN_COMMAND = "لطفاً از منوی زیر استفاده کنید یا /start را بفرستید."
 ERROR_GENERIC = "خطایی رخ داد. لطفا دوباره تلاش کنید یا با پشتیبانی تماس بگیرید."
 PANEL_ERROR_ADMIN = "⚠️ خطا در ارتباط با پنل:\n{error}"
 

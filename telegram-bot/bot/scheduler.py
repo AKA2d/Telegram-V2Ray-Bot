@@ -241,13 +241,14 @@ async def _evaluate_service(service, now: datetime) -> Optional[_EvalResult]:
         return None
 
     # --- Deduplication ---
+    # Expired: only re-send after the service has been renewed (new expires_at > last sent)
     if wants_expired:
         last = service.last_expired_sent_at
         if last is not None and (not service.expires_at or service.expires_at <= last):
             return None
+    # Warning: send at most once per service lifetime (reset on renewal)
     elif wants_warning:
-        last = service.last_warning_sent_at
-        if last is not None and (not service.expires_at or service.expires_at <= last):
+        if service.last_warning_sent_at is not None:
             return None
 
     return _EvalResult(
