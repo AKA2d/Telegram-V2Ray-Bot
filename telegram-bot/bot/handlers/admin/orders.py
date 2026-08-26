@@ -129,6 +129,7 @@ async def approve_order(callback: CallbackQuery):
             plan_name=service.panel_username,
             price=f"{int(order.amount):,}",
             months=service.months * 30,
+            user_count=service.user_count,
             traffic=traffic_text,
             link=subscription_link or "—",
         )
