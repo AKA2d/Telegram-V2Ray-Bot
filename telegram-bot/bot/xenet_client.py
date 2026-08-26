@@ -146,6 +146,18 @@ class XenetClient:
             raise XenetAPIError(data.get("message", "Failed to get V2 config"))
         return data
 
+    async def revoke_v2_account(self, account_id: int) -> str:
+        """Revoke and regenerate the V2Ray subscription link.
+
+        Returns the new subscription URL.
+        """
+        resp = await self._request("POST", f"/v2/{account_id}/revoke")
+        data = resp.json()
+        if not data.get("ok"):
+            raise XenetAPIError(data.get("message", "Failed to revoke V2 account"))
+        config = data.get("config", {})
+        return config.get("sub_link", "")
+
     async def renew_v2_account(self, account_id: int, idempotency_key: str | None = None) -> dict:
         """Renew V2Ray account for 1 month."""
         headers = {}

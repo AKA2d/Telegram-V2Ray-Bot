@@ -324,9 +324,8 @@ async def admin_regenerate_service(callback: CallbackQuery):
         return
     try:
         if service.service_type == "unlimited" and service.xenet_account_id:
-            # Unlimited service - get config from Xenet
-            config_data = await xenet_client.get_v2_config(service.xenet_account_id)
-            new_link = config_data.get("sub_link", service.subscription_link)
+            # Unlimited service - revoke and regenerate subscription link on Xenet
+            new_link = await xenet_client.revoke_v2_account(service.xenet_account_id)
             await update_service(service.id, subscription_link=new_link)
             if new_link:
                 from ...qr_gen import generate_qr_image
