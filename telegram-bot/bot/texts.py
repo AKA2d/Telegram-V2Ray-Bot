@@ -1,7 +1,7 @@
 # All customer-facing and admin-facing copy lives here in Persian.
 
 MAIN_MENU_BUY = "🛒 خرید سرویس"
-MAIN_MENU_TEST = "🧪 سرویس رایگان"
+MAIN_MENU_TEST = "🧪 تست رایگان"
 MAIN_MENU_MANAGE = "⚙️ مدیریت سرویس"
 MAIN_MENU_WHOLESALER_STATS = "📊 آمار من"
 MAIN_MENU_BECOME_WHOLESALER = "🏷️ تبدیل به عمده‌فروش"
@@ -188,10 +188,10 @@ ADMIN_MENU_WHOLESALER_DISCOUNT = "🏷 تخفیف عمده‌فروشان"
 ADMIN_MENU_TUNNEL_DEFAULT_ON = "🟢 تانل: فعال"
 ADMIN_MENU_TUNNEL_DEFAULT_OFF = "🔴 تانل: غیرفعال"
 
-TEST_ALREADY_USED = "شما قبلاً از سرویس رایگان استفاده کرده‌اید."
-TEST_NOT_AVAILABLE = "سرویس رایگان در حال حاضر غیرفعال است."
+TEST_ALREADY_USED = "شما قبلاً از تست رایگان استفاده کرده‌اید."
+TEST_NOT_AVAILABLE = "تست رایگان در حال حاضر غیرفعال است."
 TEST_LIMIT_REACHED = "شما از حد مجاز سرویس تست ({used}/{limit}) استفاده کرده‌اید."
-TEST_ACTIVATED = "سرویس رایگان شما فعال شد!\n\n🔗 لینک اشتراک:\n{link}"
+TEST_ACTIVATED = "تست رایگان شما فعال شد!\n\n🔗 لینک اشتراک:\n{link}"
 TEST_CLEARED = "لیست کاربران تست پاک شد. {count} کاربر حذف شد."
 TEST_SETTINGS_HEADER = "تنظیمات سرویس تست:"
 TEST_SETTINGS_UPDATED = "تنظیمات سرویس تست به‌روزرسانی شد."
