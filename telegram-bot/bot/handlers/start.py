@@ -258,6 +258,7 @@ async def get_test_service(message: Message):
         plan_name=plan_name,
         price="رایگان",
         months=days_display,
+        user_count="1",
         traffic=traffic_text,
         link=subscription_link or "—",
     )

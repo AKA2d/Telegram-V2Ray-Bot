@@ -109,7 +109,7 @@ async def ask_confirm(callback: CallbackQuery, state: FSMContext):
     original_price, effective_price, _ = await plan_price_quote(plan, is_wl)
 
     traffic_text = "نامحدود" if plan.service_type == "unlimited" else f"{plan.traffic_gb} گیگابایت"
-    user_count_text = "1" if plan.service_type == "unlimited" else "نامحدود"
+    user_count_text = str(plan.user_count) if plan.service_type == "unlimited" else "نامحدود"
 
     await state.update_data(
         plan_type=plan_type,
@@ -291,6 +291,7 @@ async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan, eff
         plan_name=plan.name,
         price=f"{effective_price:,}",
         months=plan.months * 30,
+        user_count=plan.user_count,
         traffic=traffic_text,
         link=subscription_link or "—",
     )

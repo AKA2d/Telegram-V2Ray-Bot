@@ -140,7 +140,7 @@ async def view_customer_service(callback: CallbackQuery, state: FSMContext = Non
 
     # Add service type indicator
     type_indicator = "♾️ نامحدود" if service.service_type == "unlimited" else "📊 ترافیکی"
-    user_count_text = "1" if service.service_type == "unlimited" else "نامحدود"
+    user_count_text = str(service.user_count) if service.service_type == "unlimited" else "نامحدود"
 
     text = t.CUSTOMER_SERVICE_DETAIL.format(
         id=service.id,
@@ -243,7 +243,7 @@ async def _refresh_service_view(callback: CallbackQuery, telegram_id: int, servi
                 pass
 
     type_indicator = "♾️ نامحدود" if service.service_type == "unlimited" else "📊 ترافیکی"
-    user_count_text = "1" if service.service_type == "unlimited" else "نامحدود"
+    user_count_text = str(service.user_count) if service.service_type == "unlimited" else "نامحدود"
 
     text = t.CUSTOMER_SERVICE_DETAIL.format(
         id=service.id,
@@ -459,7 +459,7 @@ async def add_service_confirm(callback: CallbackQuery, state: FSMContext):
 
     # Normal add service flow
     if plan.service_type == "unlimited":
-        # Unlimited service - create on Xenet
+        # Unlimited service - create on Xenet with user limit from plan
         try:
             idempotency_key = f"admin_add_{telegram_id}_{int(time.time())}"
             xenet_config = await xenet_client.create_v2_account(

@@ -48,10 +48,10 @@ async def set_plan_name(message: Message, state: FSMContext):
     service_type = data.get("service_type", "traffic_based")
     
     if service_type == "unlimited":
-        # Unlimited plans: skip user_count (fixed at 1) and traffic_gb
-        await state.update_data(user_count=1, traffic_gb=0)
-        await state.set_state(AdminPlans.add_months)
-        await message.answer(t.ASK_PLAN_MONTHS)
+        # Unlimited plans: still need user_count for Xenet simultaneous-user limit
+        await state.update_data(traffic_gb=0)
+        await state.set_state(AdminPlans.add_user_count)
+        await message.answer(t.ASK_PLAN_USER_COUNT)
     else:
         # Traffic-based plans: ask for user_count as usual
         await state.set_state(AdminPlans.add_user_count)
@@ -91,6 +91,7 @@ async def set_plan_months(message: Message, state: FSMContext):
         # Unlimited plans: skip traffic_gb, go directly to price
         await state.set_state(AdminPlans.add_price)
         await message.answer(t.ASK_PLAN_PRICE)
+        return
     else:
         # Traffic-based plans: ask for traffic_gb
         await state.set_state(AdminPlans.add_traffic_gb)

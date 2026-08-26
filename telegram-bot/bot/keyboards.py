@@ -226,7 +226,7 @@ def format_plans_list(plans: list, is_wholesaler: bool = False, discount_percent
         original = base_plan_price(p, is_wholesaler)
         price = discounted_price(original, discount_percent)
         if p.service_type == "unlimited":
-            lines.append(f"💫 سرویس شماره {i}: \n✅ {safe_plan_name(p.name)} ♾️ \n💵 {format_price(original, price)} تومان\n")
+            lines.append(f"💫 سرویس شماره {i}: \n✅ {safe_plan_name(p.name)} ♾️ \n👤 {p.user_count} کاربر\n💵 {format_price(original, price)} تومان\n")
         else:
             lines.append(f"💫 سرویس شماره {i}: \n✅ {safe_plan_name(p.name)} \n🔋 {p.traffic_gb} گیگ \n💵 {format_price(original, price)} تومان\n")
     return "\n".join(lines)
@@ -281,7 +281,7 @@ def format_admin_plans_list(plans: list) -> str:
         type_icon = "♾️" if p.service_type == "unlimited" else "📊"
         wholesale_info = f" / عمده: {int(p.wholesale_price):,}" if p.wholesale_price else ""
         if p.service_type == "unlimited":
-            lines.append(f"{i}. {status} {type_icon} {p.name} — {p.months} ماه / {int(p.price):,} تومان{wholesale_info}")
+            lines.append(f"{i}. {status} {type_icon} {p.name} — {p.months} ماه / {p.user_count} کاربر / {int(p.price):,} تومان{wholesale_info}")
         else:
             lines.append(f"{i}. {status} {type_icon} {p.name} — {p.months} ماه / {p.traffic_gb} گیگ / {int(p.price):,} تومان{wholesale_info}")
     return "\n".join(lines)

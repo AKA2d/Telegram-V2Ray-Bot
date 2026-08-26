@@ -63,6 +63,7 @@ SERVICE_ACTIVATED_DETAILED = (
     "👤 نام کاربری سرویس: {username}\n"
     "🌿 نام سرویس: {plan_name}  💵 {price} 💵\n"
     "⏳ مدت زمان: {months} روز\n"
+    "🧑‍🤝‍🧑 تعداد کاربر: {user_count}\n"
     "🗜 حجم سرویس: {traffic}\n\n"
     "🔗 لینک اتصال:\n{link}\n\n"
     "🧑‍🦯 شما میتوانید شیوه اتصال را با فشردن دکمه \"روش اتصال\" "
