@@ -204,10 +204,10 @@ async def _evaluate_service(service, now: datetime) -> Optional[_EvalResult]:
                 used_gb = bytes_used / (1024**3)
                 if usage_ratio >= 1.0:
                     traffic_expired = True
-                    traffic_detail = f"\nترافیک تمام شده \n({used_gb:.1f} از {service.traffic_gb} گیگ)\n"
+                    traffic_detail = f"ترافیک تمام شده \n🪫 ({used_gb:.1f} از {service.traffic_gb} گیگ)\n"
                 elif usage_ratio >= 0.9:
                     traffic_warning = True
-                    traffic_detail = f"\n{used_gb:.1f} از {service.traffic_gb} \nگیگ مصرف شده\n"
+                    traffic_detail = f"ترافیک در حال اتمام است \n🪫 {used_gb:.1f} از {service.traffic_gb}\n"
         except PanelAPIError:
             pass
     else:
@@ -274,9 +274,9 @@ async def _send_user_notification(bot, owner_id: int, entries: list[tuple[_EvalR
             svc_label = svc.panel_username or f"سرویس #{svc.id}"
             details = []
             if ev.time_detail:
-                details.append(f"📅 {ev.time_detail}")
+                details.append(f"\n📅 {ev.time_detail}")
             if ev.traffic_detail:
-                details.append(f"🌐 {ev.traffic_detail}")
+                details.append(f"\n🌐 {ev.traffic_detail}")
             detail_str = " — ".join(details) if details else ""
             parts.append(f"\n  • {svc_label}{(' — ' + detail_str) if detail_str else ''}")
         parts.append("\nبرای تمدید یا خرید سرویس جدید، از منوی اصلی استفاده کنید.")

@@ -226,9 +226,9 @@ def format_plans_list(plans: list, is_wholesaler: bool = False, discount_percent
         original = base_plan_price(p, is_wholesaler)
         price = discounted_price(original, discount_percent)
         if p.service_type == "unlimited":
-            lines.append(f"{i}. {safe_plan_name(p.name)} ♾️ — {format_price(original, price)} تومان")
+            lines.append(f"💫 سرویس شماره {i}: \n✅ {safe_plan_name(p.name)} ♾️ \n💵 {format_price(original, price)} تومان\n")
         else:
-            lines.append(f"{i}. {safe_plan_name(p.name)} — {p.traffic_gb} گیگ — {format_price(original, price)} تومان")
+            lines.append(f"💫 سرویس شماره {i}: \n✅ {safe_plan_name(p.name)} \n🔋 {p.traffic_gb} گیگ \n💵 {format_price(original, price)} تومان\n")
     return "\n".join(lines)
 
 
