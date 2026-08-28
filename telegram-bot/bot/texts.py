@@ -165,7 +165,7 @@ CONNECT_PLATFORM_WINDOWS = "💻 ویندوز"
 CONNECT_CHOOSE_APP = "یکی از اپلیکیشن‌های زیر را انتخاب کنید:"
 
 CANCELLED = "عملیات لغو شد."
-UNKNOWN_COMMAND = "لطفاً از منوی زیر استفاده کنید یا /start را بفرستید."
+UNKNOWN_COMMAND = "پیام نامعتبر است. لطفاً از دکمه‌های منوی زیر استفاده کنید یا برای شروع مجدد /start را بفرستید."
 ERROR_GENERIC = "خطایی رخ داد. لطفا دوباره تلاش کنید یا با پشتیبانی تماس بگیرید."
 PANEL_ERROR_ADMIN = "⚠️ خطا در ارتباط با پنل:\n{error}"
 
@@ -232,7 +232,20 @@ PANEL_STATS = (
 
 SALES_CLOSED_ON = "فروش بسته شد. کاربران دیگر قادر به خرید یا شارژ نیستند."
 SALES_CLOSED_OFF = "فروش باز شد."
-SALES_CLOSEDMsg = "فروش جمعه‌ها از ساعت ۱ بامداد تا ۱۲ ظهر بسته است. لطفا در ساعات باز اقدام به خرید یا شارژ کنید."
+SALES_CLOSED_FRIDAY = "فروش جمعه‌ها از ساعت ۱ بامداد تا ۱۲ ظهر بسته است. لطفا در ساعات باز اقدام به خرید یا شارژ کنید."
+SALES_CLOSED_WEEKDAY = "فروش روزهای غیرتعطیل از ساعت ۱ بامداد تا ۱۰ صبح بسته است. لطفا در ساعات باز اقدام به خرید یا شارژ کنید."
+
+
+def get_sales_closed_msg() -> str:
+    """Return the appropriate sales-closed message based on current Tehran time."""
+    from datetime import datetime, timezone, timedelta
+    tehran = timezone(timedelta(hours=3, minutes=30))
+    now = datetime.now(tehran)
+    if now.weekday() == 4:  # Friday
+        return SALES_CLOSED_FRIDAY
+    return SALES_CLOSED_WEEKDAY
+
+
 SALES_CLOSED_LABEL_ON = "🟢 فروش: باز"
 SALES_CLOSED_LABEL_OFF = "🔴 فروش: بسته"
 

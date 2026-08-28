@@ -62,7 +62,7 @@ async def start_buy(message: Message, state: FSMContext):
             async with async_session() as session:
                 user = await session.get(User, user_id)
                 if not user or user.wallet_balance <= 0:
-                    await message.answer(t.SALES_CLOSEDMsg, reply_markup=main_menu(is_admin(user_id)))
+                    await message.answer(t.get_sales_closed_msg(), reply_markup=main_menu(is_admin(user_id)))
                     return
     
     await state.set_state(BuyService.choosing_service_type)
@@ -286,12 +286,13 @@ async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan, eff
     from ..qr_gen import generate_qr_image
 
     traffic_text = "نامحدود" if plan.service_type == "unlimited" else f"{plan.traffic_gb} گیگابایت"
+    user_count_text = "نامحدود" if plan.service_type == "traffic_based" else plan.user_count
     text = t.SERVICE_ACTIVATED_DETAILED.format(
         username=panel_username,
         plan_name=plan.name,
         price=f"{effective_price:,}",
         months=plan.months * 30,
-        user_count=plan.user_count,
+        user_count=user_count_text,
         traffic=traffic_text,
         link=subscription_link or "—",
     )

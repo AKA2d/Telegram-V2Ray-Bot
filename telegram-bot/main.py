@@ -21,6 +21,7 @@ from bot.handlers import (
     admin_entry,
     buy_service,
     connect_guide,
+    fallback,
     manage_service,
     start,
     wallet,
@@ -42,6 +43,8 @@ def _setup_handlers(dp: Dispatcher) -> None:
     dp.include_router(account_info.router)
     dp.include_router(connect_guide.router)
     dp.include_router(admin_router)
+    # Fallback MUST be last — it catches unmatched text in the main menu.
+    dp.include_router(fallback.router)
 
 
 async def _run_polling(bot: Bot, dp: Dispatcher) -> None:

@@ -72,3 +72,17 @@ async def update_plan_field(plan_id: int, **fields) -> None:
             for key, value in fields.items():
                 setattr(plan, key, value)
             await session.commit()
+
+
+async def find_plan_for_service(service) -> Plan | None:
+    """Look up the plan that matches a service's attributes."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Plan).where(
+                Plan.service_type == service.service_type,
+                Plan.user_count == service.user_count,
+                Plan.months == service.months,
+                Plan.traffic_gb == service.traffic_gb,
+            )
+        )
+        return result.scalars().first()

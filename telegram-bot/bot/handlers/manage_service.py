@@ -292,7 +292,7 @@ async def extend_start(callback: CallbackQuery, state: FSMContext):
 
     if (await get_setting("sales_closed")) == "1":
         if not _is_admin(callback.from_user.id) and not await _is_wholesaler(callback.from_user.id):
-            await callback.answer(t.SALES_CLOSEDMsg, show_alert=True)
+            await callback.answer(t.get_sales_closed_msg(), show_alert=True)
             return
 
     service_id = int(callback.data.split(":")[1])

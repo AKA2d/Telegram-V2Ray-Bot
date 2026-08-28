@@ -123,13 +123,17 @@ async def approve_order(callback: CallbackQuery):
         await set_setting("sold_traffic", str(current_traffic + float(service.traffic_gb if service.service_type == "traffic_based" else 0)))
         await callback.bot.send_message(order.telegram_id, t.ORDER_APPROVED_CUSTOMER)
         traffic_text = "نامحدود" if service.service_type == "unlimited" else f"{service.traffic_gb} گیگابایت"
+        user_count_text = "نامحدود" if service.service_type == "traffic_based" else service.user_count
         from ...qr_gen import generate_qr_image
+        from ...plans_repo import find_plan_for_service
+        plan = await find_plan_for_service(service)
+        plan_name = plan.name if plan else service.panel_username
         text = t.SERVICE_ACTIVATED_DETAILED.format(
             username=update_fields.get("panel_username", service.panel_username),
-            plan_name=service.panel_username,
+            plan_name=plan_name,
             price=f"{int(order.amount):,}",
             months=service.months * 30,
-            user_count=service.user_count,
+            user_count=user_count_text,
             traffic=traffic_text,
             link=subscription_link or "—",
         )
