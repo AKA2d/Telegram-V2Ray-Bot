@@ -78,6 +78,12 @@ async def approve_order(callback: CallbackQuery):
                 )
                 subscription_link = xenet_config.sub_link
                 xenet_account_id = xenet_config.id
+                # Xenet only supports 1-month creation; renew for extra months
+                if service.months > 1:
+                    await xenet_client.renew_v2_account_multi(
+                        xenet_account_id, service.months - 1,
+                        idempotency_prefix=f"admin_order_extra_{order.id}",
+                    )
                 duration_seconds = service.months * 30 * 86400
             else:
                 # Traffic-based service - use Panel API

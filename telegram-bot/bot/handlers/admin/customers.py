@@ -433,11 +433,13 @@ async def add_service_confirm(callback: CallbackQuery, state: FSMContext):
             new_expires = now + td(days=plan.months * 30)
 
         if service.service_type == "unlimited":
-            # Unlimited service - renew on Xenet
+            # Unlimited service - renew on Xenet for each month
             new_traffic = 0
             try:
-                idempotency_key = f"admin_extend_{service.id}_{int(time.time())}"
-                await xenet_client.renew_v2_account(service.xenet_account_id, idempotency_key=idempotency_key)
+                await xenet_client.renew_v2_account_multi(
+                    service.xenet_account_id, plan.months,
+                    idempotency_prefix=f"admin_extend_{service.id}",
+                )
             except XenetAPIError:
                 pass  # Continue with DB update even if Xenet fails
         else:
@@ -454,25 +456,29 @@ async def add_service_confirm(callback: CallbackQuery, state: FSMContext):
         await state.clear()
         await callback.message.edit_text(f"سرویس #{extend_service_id} با موفقیت تمدید شد.\n\n+{plan.months} ماه")
         await callback.answer()
-        return
-
-    # Normal add service flow
-    if plan.service_type == "unlimited":
-        # Unlimited service - create on Xenet with user limit from plan
-        try:
-            idempotency_key = f"admin_add_{telegram_id}_{int(time.time())}"
-            xenet_config = await xenet_client.create_v2_account(
-                users=plan.user_count,
-                idempotency_key=idempotency_key,
-            )
-            subscription_link = xenet_config.sub_link
-            xenet_account_id = xenet_config.id
-            # Use the name returned by Xenet API as panel_username
-            panel_username = xenet_config.name
-        except XenetAPIError as exc:
-            logger.exception("Failed to create Xenet account for customer %s", telegram_id)
-            await callback.answer(f"خطا در Xenet: {exc}", show_alert=True)
-            return
+        return        # Normal add service flow
+        if plan.service_type == "unlimited":
+            # Unlimited service - create on Xenet with user limit from plan
+            try:
+                idempotency_key = f"admin_add_{telegram_id}_{int(time.time())}"
+                xenet_config = await xenet_client.create_v2_account(
+                    users=plan.user_count,
+                    idempotency_key=idempotency_key,
+                )
+                subscription_link = xenet_config.sub_link
+                xenet_account_id = xenet_config.id
+                # Use the name returned by Xenet API as panel_username
+                panel_username = xenet_config.name
+                # Xenet only supports 1-month creation; renew for extra months
+                if plan.months > 1:
+                    await xenet_client.renew_v2_account_multi(
+                        xenet_account_id, plan.months - 1,
+                        idempotency_prefix=f"admin_add_extra_{telegram_id}",
+                    )
+            except XenetAPIError as exc:
+                logger.exception("Failed to create Xenet account for customer %s", telegram_id)
+                await callback.answer(f"خطا در Xenet: {exc}", show_alert=True)
+                return
 
         from datetime import timedelta
         duration_seconds = plan.months * 30 * 86400

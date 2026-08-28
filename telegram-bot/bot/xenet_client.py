@@ -170,6 +170,21 @@ class XenetClient:
             raise XenetAPIError(data.get("message", "Failed to renew V2 account"))
         return data
 
+    async def renew_v2_account_multi(
+        self, account_id: int, months: int, idempotency_prefix: str = "renew"
+    ) -> None:
+        """Renew V2Ray account for *months* months.
+
+        The Xenet API only supports 1-month renewals, so we call
+        ``renew_v2_account`` in a loop. Each call gets a unique
+        idempotency key derived from *idempotency_prefix*.
+        """
+        if months <= 0:
+            return
+        for i in range(months):
+            key = f"{idempotency_prefix}_{int(time.time())}_{i}"
+            await self.renew_v2_account(account_id, idempotency_key=key)
+
     async def toggle_v2_account(self, account_id: int) -> dict:
         """Toggle V2Ray account enabled/disabled."""
         resp = await self._request("POST", f"/v2/{account_id}/toggle")

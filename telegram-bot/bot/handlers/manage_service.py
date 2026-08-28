@@ -504,8 +504,10 @@ async def _apply_extend(service, add_months: int, add_traffic: int):
         new_traffic = 0  # Unlimited has no traffic limit
         if service.xenet_account_id:
             try:
-                idempotency_key = f"extend_{service.id}_{int(time.time())}"
-                await xenet_client.renew_v2_account(service.xenet_account_id, idempotency_key=idempotency_key)
+                await xenet_client.renew_v2_account_multi(
+                    service.xenet_account_id, add_months,
+                    idempotency_prefix=f"extend_{service.id}",
+                )
             except XenetAPIError:
                 pass  # Continue with DB update even if Xenet fails
     else:

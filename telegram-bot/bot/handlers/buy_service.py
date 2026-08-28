@@ -237,6 +237,12 @@ async def _pay_with_wallet(callback: CallbackQuery, state: FSMContext, plan, eff
             panel_user = None
             # Use the name returned by Xenet API as panel_username
             panel_username = xenet_config.name
+            # Xenet only supports 1-month creation; renew for extra months
+            if plan.months > 1:
+                await xenet_client.renew_v2_account_multi(
+                    xenet_account_id, plan.months - 1,
+                    idempotency_prefix=f"order_extra_{telegram_id}",
+                )
         else:
             # Create traffic-based service via PasarGuard API
             panel_user = await panel_client.create_active_user(
